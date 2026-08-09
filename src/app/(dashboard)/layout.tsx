@@ -1,0 +1,239 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Code2, Search, Bell, Menu, X, Moon, Sun, ChevronDown,
+  LayoutDashboard, FolderKanban, CheckSquare, Store, Lightbulb,
+  FileText, FileCheck, MessageSquare, Wallet, User, Star, Settings,
+  PlusCircle, ShoppingBag, Users, Package, CreditCard, Tag,
+  AlertTriangle, TrendingUp, LogOut,
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { currentUser, notifications as mockNotifications } from "@/lib/mock-data";
+import { STUDENT_SIDEBAR_ITEMS, CLIENT_SIDEBAR_ITEMS, ADMIN_SIDEBAR_ITEMS } from "@/lib/constants";
+
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard, FolderKanban, CheckSquare, Store, Lightbulb,
+  FileText, FileCheck, MessageSquare, Wallet, User, Star, Settings,
+  PlusCircle, ShoppingBag, Users, Package, CreditCard, Tag,
+  AlertTriangle, TrendingUp,
+};
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const role = pathname?.startsWith("/admin") ? "admin" : "student";
+  const sidebarItems = role === "admin" ? ADMIN_SIDEBAR_ITEMS : STUDENT_SIDEBAR_ITEMS;
+  const unreadCount = mockNotifications.filter((n) => !n.isRead).length;
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[var(--background)]">
+      {/* Sidebar - Desktop */}
+      <aside className="hidden lg:flex lg:flex-col w-64 border-r border-[var(--border)] bg-[var(--sidebar-bg)]">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 h-16 px-6 border-b border-[var(--border)] shrink-0">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-white">
+              <Code2 className="h-4 w-4" />
+            </div>
+            <span className="text-lg font-bold">
+              Campus<span className="text-[var(--primary)]">Code</span>
+            </span>
+          </Link>
+        </div>
+
+        {/* Nav Items */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {sidebarItems.map((item) => {
+            const Icon = iconMap[item.icon] || LayoutDashboard;
+            const isActive =
+              item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname?.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? "bg-[var(--primary)]/10 text-[var(--primary)]"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]"
+                }`}
+              >
+                <Icon className="h-4.5 w-4.5 shrink-0" />
+                {item.label}
+                {item.label === "Messages" && (
+                  <Badge className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">3</Badge>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User */}
+        <div className="p-3 border-t border-[var(--border)]">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--muted)] transition-colors">
+            <Avatar name={currentUser.name} size="sm" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{currentUser.name}</p>
+              <p className="text-xs text-[var(--muted-foreground)] truncate">{currentUser.studentProfile?.college}</p>
+            </div>
+            <Link href="/settings" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+              <Settings className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed left-0 top-0 bottom-0 z-50 w-64 border-r border-[var(--border)] bg-[var(--sidebar-bg)] lg:hidden"
+            >
+              <div className="flex items-center justify-between h-16 px-6 border-b border-[var(--border)]">
+                <Link href="/" className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-white">
+                    <Code2 className="h-4 w-4" />
+                  </div>
+                  <span className="text-lg font-bold">
+                    Campus<span className="text-[var(--primary)]">Code</span>
+                  </span>
+                </Link>
+                <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                {sidebarItems.map((item) => {
+                  const Icon = iconMap[item.icon] || LayoutDashboard;
+                  const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        isActive
+                          ? "bg-[var(--primary)]/10 text-[var(--primary)]"
+                          : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]"
+                      }`}
+                    >
+                      <Icon className="h-4.5 w-4.5 shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Bar */}
+        <header className="flex items-center justify-between h-16 px-4 sm:px-6 border-b border-[var(--border)] bg-[var(--background)] shrink-0">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden text-[var(--muted-foreground)]"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+
+            {/* Search */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--muted)] w-64">
+              <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <input
+                placeholder="Search..."
+                className="bg-transparent text-sm outline-none flex-1 placeholder:text-[var(--muted-foreground)]"
+              />
+              <kbd className="text-xs text-[var(--muted-foreground)] font-mono">⌘K</kbd>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="text-[var(--muted-foreground)]">
+              <Sun className="h-4.5 w-4.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4.5 w-4.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
+
+            {/* Notifications */}
+            <div className="relative">
+              <Button variant="ghost" size="icon" onClick={() => setNotifOpen(!notifOpen)} className="text-[var(--muted-foreground)] relative">
+                <Bell className="h-4.5 w-4.5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
+                )}
+              </Button>
+              <AnimatePresence>
+                {notifOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                    className="absolute right-0 mt-2 w-80 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg z-50"
+                  >
+                    <div className="p-4 border-b border-[var(--border)]">
+                      <h3 className="font-semibold text-sm">Notifications</h3>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {mockNotifications.slice(0, 5).map((n) => (
+                        <Link
+                          key={n.id}
+                          href={n.link || "#"}
+                          onClick={() => setNotifOpen(false)}
+                          className={`block p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)] transition-colors ${
+                            !n.isRead ? "bg-[var(--primary)]/5" : ""
+                          }`}
+                        >
+                          <p className="text-sm font-medium">{n.title}</p>
+                          <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">{n.message}</p>
+                        </Link>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Avatar */}
+            <Link href="/settings" className="flex items-center gap-2 rounded-lg p-1 hover:bg-[var(--muted)] transition-colors">
+              <Avatar name={currentUser.name} size="sm" />
+            </Link>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
