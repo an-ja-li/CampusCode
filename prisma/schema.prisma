@@ -1,0 +1,617 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users ──────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  avatar        String?
+  password      String?
+  role          UserRole  @default(STUDENT)
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  studentProfile StudentProfile?
+  clientProfile  ClientProfile?
+  ownedProjects  Project[]        @relation("ProjectOwner")
+  memberships    ProjectMember[]
+  tasks          Task[]           @relation("TaskAssignee")
+  createdTasks   Task[]           @relation("TaskCreator")
+  products       Product[]        @relation("ProductSeller")
+  orders         Order[]
+  solutionRequests SolutionRequest[] @relation("RequestClient")
+  proposals      Proposal[]       @relation("ProposalStudent")
+  studentContracts Contract[]     @relation("ContractStudent")
+  clientContracts  Contract[]     @relation("ContractClient")
+  sentMessages   Message[]        @relation("MessageSender")
+  notifications  Notification[]
+  reviewsGiven   Review[]         @relation("ReviewReviewer")
+  reviewsReceived Review[]        @relation("ReviewReviewee")
+  conversationParticipants ConversationParticipant[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  STUDENT
+  CLIENT
+  ADMIN
+}
+
+// ── Student Profile ────────────────────────────────────────────
+
+model StudentProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  college           String
+  degree            String
+  graduationYear    Int
+  skills            String[]
+  github            String?
+  linkedin          String?
+  bio               String   @default("")
+  level             StudentLevel @default(BEGINNER)
+  rating            Float    @default(0)
+  reviewCount       Int      @default(0)
+  totalSales        Int      @default(0)
+  totalEarnings     Float    @default(0)
+  completedProjects Int      @default(0)
+  portfolioUrl      String?
+
+  badges            Badge[]
+
+  @@map("student_profiles")
+}
+
+enum StudentLevel {
+  BEGINNER
+  CONTRIBUTOR
+  BUILDER
+  EXPERT
+  TOP_DEVELOPER
+}
+
+model Badge {
+  id          String   @id @default(cuid())
+  name        String
+  icon        String
+  description String
+  earnedAt    DateTime @default(now())
+  profileId   String
+  profile     StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("badges")
+}
+
+// ── Client Profile ─────────────────────────────────────────────
+
+model ClientProfile {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   String
+  website        String?
+  description    String  @default("")
+  profileType    String  @default("startup")
+  isVerified     Boolean @default(false)
+  rating         Float   @default(0)
+  reviewCount    Int     @default(0)
+  totalSpent     Float   @default(0)
+  projectsPosted Int     @default(0)
+
+  @@map("client_profiles")
+}
+
+// ── Projects ───────────────────────────────────────────────────
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String
+  category    String
+  status      ProjectStatus @default(PLANNING)
+  progress    Int           @default(0)
+  ownerId     String
+  owner       User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+  githubRepo  String?
+  technologies String[]
+  isPublished Boolean       @default(false)
+  deadline    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  members     ProjectMember[]
+  tasks       Task[]
+  milestones  ProjectMilestone[]
+  contracts   Contract[]
+  product     Product?       @relation("ProjectProduct")
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  role      String   @default("developer")
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// ── Tasks ──────────────────────────────────────────────────────
+
+model Task {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String       @default("")
+  status      TaskStatus   @default(BACKLOG)
+  priority    TaskPriority @default(MEDIUM)
+  labels      String[]
+  assigneeId  String?
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creatorId   String
+  creator     User         @relation("TaskCreator", fields: [creatorId], references: [id])
+  dueDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  subtasks    SubTask[]
+  comments    Comment[]
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model SubTask {
+  id        String  @id @default(cuid())
+  taskId    String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title     String
+  completed Boolean @default(false)
+
+  @@map("subtasks")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@map("comments")
+}
+
+model ProjectMilestone {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  dueDate     DateTime?
+  status      String   @default("pending")
+  progress    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@map("project_milestones")
+}
+
+// ── Products / Marketplace ─────────────────────────────────────
+
+model Product {
+  id            String        @id @default(cuid())
+  name          String
+  slug          String        @unique
+  description   String
+  shortDescription String     @default("")
+  category      String
+  price         Float         @default(0)
+  isFree        Boolean       @default(false)
+  status        ProductStatus @default(DRAFT)
+  sellerId      String
+  seller        User          @relation("ProductSeller", fields: [sellerId], references: [id])
+  projectId     String?       @unique
+  project       Project?      @relation("ProjectProduct", fields: [projectId], references: [id])
+  technologies  String[]
+  tags          String[]
+  features      String[]
+  requirements  String[]
+  license       String        @default("Commercial")
+  demoUrl       String?
+  githubUrl     String?
+  documentation String?
+  installation  String?
+  screenshots   String[]
+  rating        Float         @default(0)
+  reviewCount   Int           @default(0)
+  salesCount    Int           @default(0)
+  viewCount     Int           @default(0)
+  downloadCount Int           @default(0)
+  version       String        @default("1.0.0")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  reviews       ProductReview[]
+  orders        Order[]
+
+  @@map("products")
+}
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+model ProductReview {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+
+  @@map("product_reviews")
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id])
+  buyerId     String
+  buyer       User        @relation(fields: [buyerId], references: [id])
+  amount      Float
+  status      OrderStatus @default(PENDING)
+  paymentId   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  DISPUTED
+}
+
+// ── Solution Requests ──────────────────────────────────────────
+
+model SolutionRequest {
+  id                    String                @id @default(cuid())
+  title                 String
+  description           String
+  problemStatement      String                @default("")
+  category              String
+  solutionType          String                @default("web")
+  difficulty            String                @default("intermediate")
+  status                SolutionRequestStatus @default(OPEN)
+  clientId              String
+  client                User                  @relation("RequestClient", fields: [clientId], references: [id])
+  budgetMin             Float?
+  budgetMax             Float?
+  isFixedPrice          Boolean               @default(true)
+  deadline              DateTime?
+  preferredTechnologies String[]
+  requiredFeatures      String[]
+  expectedDeliverables  String[]
+  attachments           String[]
+  proposalCount         Int                   @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  proposals             Proposal[]
+  contracts             Contract[]
+
+  @@map("solution_requests")
+}
+
+enum SolutionRequestStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+// ── Proposals ──────────────────────────────────────────────────
+
+model Proposal {
+  id                  String         @id @default(cuid())
+  solutionRequestId   String
+  solutionRequest     SolutionRequest @relation(fields: [solutionRequestId], references: [id], onDelete: Cascade)
+  studentId           String
+  student             User           @relation("ProposalStudent", fields: [studentId], references: [id])
+  content             String
+  price               Float
+  estimatedDelivery   Int            // days
+  technologies        String[]
+  status              ProposalStatus @default(PENDING)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  milestones          ProposalMilestone[]
+
+  @@unique([solutionRequestId, studentId])
+  @@map("proposals")
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model ProposalMilestone {
+  id          String   @id @default(cuid())
+  proposalId  String
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  amount      Float
+  durationDays Int
+
+  @@map("proposal_milestones")
+}
+
+// ── Contracts ──────────────────────────────────────────────────
+
+model Contract {
+  id                String         @id @default(cuid())
+  solutionRequestId String
+  solutionRequest   SolutionRequest @relation(fields: [solutionRequestId], references: [id])
+  proposalId        String
+  studentId         String
+  student           User           @relation("ContractStudent", fields: [studentId], references: [id])
+  clientId          String
+  client            User           @relation("ContractClient", fields: [clientId], references: [id])
+  projectId         String?
+  project           Project?       @relation(fields: [projectId], references: [id])
+  totalAmount       Float
+  platformFee       Float
+  studentEarnings   Float
+  status            ContractStatus @default(CREATED)
+  startDate         DateTime       @default(now())
+  endDate           DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  milestones        ContractMilestone[]
+  reviews           Review[]
+  transactions      Transaction[]
+
+  @@map("contracts")
+}
+
+enum ContractStatus {
+  CREATED
+  ACTIVE
+  IN_REVIEW
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+model ContractMilestone {
+  id          String          @id @default(cuid())
+  contractId  String
+  contract    Contract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  title       String
+  description String          @default("")
+  amount      Float
+  status      MilestoneStatus @default(PENDING)
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@map("contract_milestones")
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REVISION_REQUESTED
+}
+
+// ── Reviews ────────────────────────────────────────────────────
+
+model Review {
+  id              String   @id @default(cuid())
+  contractId      String
+  contract        Contract @relation(fields: [contractId], references: [id])
+  reviewerId      String
+  reviewer        User     @relation("ReviewReviewer", fields: [reviewerId], references: [id])
+  revieweeId      String
+  reviewee        User     @relation("ReviewReviewee", fields: [revieweeId], references: [id])
+  communication   Int
+  quality         Int
+  delivery        Int
+  professionalism Int
+  overall         Float
+  content         String
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@map("reviews")
+}
+
+// ── Messaging ──────────────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  projectId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  content        String
+  type           MessageType  @default(TEXT)
+  attachmentUrl  String?
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+}
+
+// ── Payments ───────────────────────────────────────────────────
+
+model Transaction {
+  id          String            @id @default(cuid())
+  type        TransactionType
+  amount      Float
+  status      PaymentStatus     @default(PENDING)
+  fromUserId  String?
+  toUserId    String?
+  orderId     String?
+  contractId  String?
+  contract    Contract?         @relation(fields: [contractId], references: [id])
+  milestoneId String?
+  description String
+  createdAt   DateTime          @default(now())
+
+  @@map("transactions")
+}
+
+enum TransactionType {
+  PAYMENT
+  PAYOUT
+  REFUND
+  COMMISSION
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ── Notifications ──────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  PROPOSAL
+  CONTRACT
+  PAYMENT
+  REVIEW
+  MESSAGE
+  SYSTEM
+  MATCH
+  PURCHASE
+}
+
+// ── Categories & Tags ──────────────────────────────────────────
+
+model Category {
+  id           String @id @default(cuid())
+  name         String @unique
+  slug         String @unique
+  icon         String @default("Globe")
+  productCount Int    @default(0)
+  requestCount Int    @default(0)
+
+  @@map("categories")
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  slug  String @unique
+  count Int    @default(0)
+
+  @@map("tags")
+}
