@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { notifications as mockNotifications } from "@/lib/mock-data";
+import { SearchBar } from "@/components/shared/SearchBar";
+import { NotificationCenter } from "@/components/shared/NotificationCenter";
 
 interface NavbarProps {
   isLoggedIn?: boolean;
@@ -122,41 +124,7 @@ export function Navbar({ isLoggedIn = false, userName = "Harsh Vardhan" }: Navba
                         </span>
                       )}
                     </Button>
-                    <AnimatePresence>
-                      {notifOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                          className="absolute right-0 mt-2 w-80 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg z-50"
-                        >
-                          <div className="p-4 border-b border-[var(--border)]">
-                            <h3 className="font-semibold text-sm">Notifications</h3>
-                          </div>
-                          <div className="max-h-80 overflow-y-auto">
-                            {mockNotifications.slice(0, 5).map((notif) => (
-                              <div
-                                key={notif.id}
-                                className={`p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)] transition-colors ${
-                                  !notif.isRead ? "bg-[var(--primary)]/5" : ""
-                                }`}
-                              >
-                                <p className="text-sm font-medium">{notif.title}</p>
-                                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{notif.message}</p>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="p-3 border-t border-[var(--border)]">
-                            <Link
-                              href="/notifications"
-                              className="text-xs text-[var(--primary)] font-medium hover:underline"
-                            >
-                              View all notifications
-                            </Link>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <NotificationCenter isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
                   </div>
 
                   {/* User Menu */}
@@ -278,59 +246,8 @@ export function Navbar({ isLoggedIn = false, userName = "Harsh Vardhan" }: Navba
         )}
       </AnimatePresence>
 
-      {/* Search Modal */}
-      <AnimatePresence>
-        {searchOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-start justify-center pt-[15vh]"
-            onClick={() => setSearchOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.96 }}
-              className="w-full max-w-lg mx-4 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 px-4 border-b border-[var(--border)]">
-                <Search className="h-5 w-5 text-[var(--muted-foreground)] shrink-0" />
-                <input
-                  autoFocus
-                  placeholder="Search products, projects, developers..."
-                  className="flex-1 h-14 bg-transparent text-sm outline-none placeholder:text-[var(--muted-foreground)]"
-                />
-                <kbd className="hidden sm:inline-flex h-6 items-center rounded border border-[var(--border)] px-1.5 text-xs text-[var(--muted-foreground)] font-mono">
-                  ESC
-                </kbd>
-              </div>
-              <div className="p-4">
-                <p className="text-xs text-[var(--muted-foreground)] mb-3">Quick Links</p>
-                <div className="space-y-1">
-                  {[
-                    { label: "Browse Marketplace", href: "/marketplace" },
-                    { label: "Find Opportunities", href: "/solutions" },
-                    { label: "Post a Requirement", href: "/solutions/post" },
-                    { label: "My Dashboard", href: "/dashboard" },
-                  ].map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setSearchOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-[var(--muted)] transition-colors"
-                    >
-                      <Search className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Global Search Bar */}
+      <SearchBar isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }

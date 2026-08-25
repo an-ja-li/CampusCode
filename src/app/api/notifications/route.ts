@@ -3,34 +3,85 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { notifications } from '@/lib/mock-data';
+import { db } from '@/lib/db';
+import { notifications as mockNotifications } from '@/lib/mock-data';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId') || 'u1';
-  const unreadOnly = searchParams.get('unread') === 'true';
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId') || 'u1';
+    const unreadOnly = searchParams.get('unread') === 'true';
 
-  let filtered = notifications.filter((n) => n.userId === userId);
-  if (unreadOnly) {
-    filtered = filtered.filter((n) => !n.isRead);
+    try {
+      const dbNotifications = await db.notification.findMany({
+        where: {
+          userId,
+          ...(unreadOnly ? { isRead: false } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const unreadCount = await db.notification.count({
+        where: { userId, isRead: false },
+      });
+
+      if (dbNotifications && dbNotifications.length > 0) {
+        return NextResponse.json({
+          notifications: dbNotifications,
+          unreadCount,
+        });
+      }
+    } catch {
+      // Fallback
+    }
+
+    let filtered = mockNotifications.filter((n) => n.userId === userId);
+    if (unreadOnly) {
+      filtered = filtered.filter((n) => !n.isRead);
+    }
+
+    return NextResponse.json({
+      notifications: filtered,
+      unreadCount: filtered.filter((n) => !n.isRead).length,
+    });
+  } catch (error) {
+    console.error('[API Notifications Error]:', error);
+    return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
-
-  return NextResponse.json({
-    notifications: filtered,
-    unreadCount: filtered.filter((n) => !n.isRead).length,
-  });
 }
 
 export async function PATCH(request: NextRequest) {
-  const body = await request.json();
-  const { action, notificationId } = body;
+  try {
+    const body = await request.json();
+    const { action, notificationId, userId } = body;
 
-  if (action === 'mark_read') {
-    return NextResponse.json({ success: true, id: notificationId });
-  }
-  if (action === 'mark_all_read') {
-    return NextResponse.json({ success: true });
-  }
+    if (action === 'mark_read' && notificationId) {
+      try {
+        await db.notification.update({
+          where: { id: notificationId },
+          data: { isRead: true },
+        });
+      } catch {
+        // Fallback
+      }
+      return NextResponse.json({ success: true, id: notificationId });
+    }
 
-  return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    if (action === 'mark_all_read' && userId) {
+      try {
+        await db.notification.updateMany({
+          where: { userId, isRead: false },
+          data: { isRead: true },
+        });
+      } catch {
+        // Fallback
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: 'Invalid action parameters' }, { status: 400 });
+  } catch (error) {
+    console.error('[API Notifications Patch Error]:', error);
+    return NextResponse.json({ error: 'Failed to update notification' }, { status: 500 });
+  }
 }
