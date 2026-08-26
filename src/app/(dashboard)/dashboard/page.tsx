@@ -4,14 +4,15 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   FolderKanban, Package, Send, FileCheck, DollarSign, TrendingUp,
-  ArrowRight, Star, Clock, Zap, ChevronRight, ExternalLink,
+  ArrowRight, Clock, Zap, ChevronRight, PlusCircle, ShoppingBag,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
 import { formatCurrency } from "@/lib/utils";
-import { projects, solutionRequests, earningsData, currentUser, aiMatchScores } from "@/lib/mock-data";
+import { solutionRequests, aiMatchScores } from "@/lib/mock-data";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserData } from "@/lib/user-store";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -22,35 +23,56 @@ const fadeUp = {
 };
 
 export default function DashboardPage() {
-  const user = currentUser;
-  const profile = user.studentProfile!;
+  const { user } = useAuth();
+  const { projects, stats } = useUserData();
 
-  const stats = [
-    { label: "Active Projects", value: projects.filter((p) => p.status === "active").length, icon: FolderKanban, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30" },
-    { label: "Published Products", value: profile.totalSales > 50 ? 12 : 5, icon: Package, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" },
-    { label: "Applications", value: 3, icon: Send, color: "text-purple-500 bg-purple-100 dark:bg-purple-900/30" },
-    { label: "Active Contracts", value: 1, icon: FileCheck, color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30" },
-    { label: "Total Sales", value: profile.totalSales, icon: DollarSign, color: "text-cyan-500 bg-cyan-100 dark:bg-cyan-900/30" },
-    { label: "Total Earnings", value: formatCurrency(profile.totalEarnings), icon: TrendingUp, color: "text-rose-500 bg-rose-100 dark:bg-rose-900/30", isString: true },
+  const userFirstName = user?.name ? user.name.split(" ")[0] : "Developer";
+  const activeProjects = projects.filter((p) => p.status === "active");
+
+  const dashboardStats = [
+    { label: "Active Projects", value: stats.activeProjectsCount, icon: FolderKanban, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30" },
+    { label: "Published Products", value: stats.publishedProductsCount, icon: Package, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" },
+    { label: "Applications", value: stats.proposalsCount, icon: Send, color: "text-purple-500 bg-purple-100 dark:bg-purple-900/30" },
+    { label: "Active Contracts", value: stats.activeContractsCount, icon: FileCheck, color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30" },
+    { label: "Total Sales", value: stats.totalSales, icon: DollarSign, color: "text-cyan-500 bg-cyan-100 dark:bg-cyan-900/30" },
+    { label: "Total Earnings", value: formatCurrency(stats.totalEarnings), icon: TrendingUp, color: "text-rose-500 bg-rose-100 dark:bg-rose-900/30", isString: true },
   ];
 
-  const activeProjects = projects.filter((p) => p.status === "active");
+  // User-specific monthly earnings data (0 baseline for new users)
+  const userEarningsData = [
+    { month: "Jan", earnings: 0 },
+    { month: "Feb", earnings: 0 },
+    { month: "Mar", earnings: 0 },
+    { month: "Apr", earnings: 0 },
+    { month: "May", earnings: 0 },
+    { month: "Jun", earnings: 0 },
+    { month: "Jul", earnings: Math.round(stats.totalEarnings * 0.4) },
+    { month: "Aug", earnings: stats.totalEarnings },
+  ];
+
+  const userSkills = user?.studentProfile?.skills || ["React", "TypeScript", "Next.js"];
 
   const matchedRequests = solutionRequests
     .filter((sr) => sr.status === "open")
     .slice(0, 3)
-    .map((sr) => ({
-      ...sr,
-      matchScore: aiMatchScores[sr.id]?.score || Math.floor(Math.random() * 30 + 60),
-      matchingSkills: aiMatchScores[sr.id]?.matchingSkills || sr.preferredTechnologies.slice(0, 2),
-    }));
+    .map((sr) => {
+      const matchScore = aiMatchScores[sr.id]?.score || Math.floor(Math.random() * 20 + 75);
+      const matchingSkills = sr.preferredTechnologies.filter((t) =>
+        userSkills.some((s) => s.toLowerCase() === t.toLowerCase())
+      );
+      return {
+        ...sr,
+        matchScore,
+        matchingSkills: matchingSkills.length > 0 ? matchingSkills : sr.preferredTechnologies.slice(0, 2),
+      };
+    });
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <motion.div {...fadeUp} transition={{ delay: 0 }}>
         <h1 className="text-2xl font-bold mb-1">
-          Welcome back, {user.name.split(" ")[0]} 👋
+          Welcome back, {userFirstName} 👋
         </h1>
         <p className="text-[var(--muted-foreground)]">
           Here&apos;s what&apos;s happening with your projects and marketplace.
@@ -59,7 +81,7 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <motion.div {...fadeUp} transition={{ delay: 0.05 }} className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {stats.map((stat, i) => (
+        {dashboardStats.map((stat) => (
           <Card key={stat.label} className="card-hover">
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-3">
@@ -77,58 +99,78 @@ export default function DashboardPage() {
       <div className="grid lg:grid-cols-5 gap-6">
         {/* Current Work */}
         <motion.div {...fadeUp} transition={{ delay: 0.1 }} className="lg:col-span-3">
-          <Card>
+          <Card className="h-full flex flex-col">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Current Work</CardTitle>
-                <Link href="/projects">
-                  <Button variant="ghost" size="sm" className="text-xs">
-                    View all <ArrowRight className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
+                {activeProjects.length > 0 && (
+                  <Link href="/projects">
+                    <Button variant="ghost" size="sm" className="text-xs">
+                      View all <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </Link>
+                )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {activeProjects.map((project) => (
-                <Link key={project.id} href={`/projects/${project.id}`}>
-                  <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-[var(--muted)] transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium text-sm truncate">{project.name}</h3>
-                        <Badge variant={project.contractId ? "warning" : "secondary"} className="shrink-0 text-[10px]">
-                          {project.contractId ? "Contract" : "Personal"}
-                        </Badge>
+            <CardContent className="flex-1 flex flex-col justify-center">
+              {activeProjects.length > 0 ? (
+                <div className="space-y-3">
+                  {activeProjects.map((project) => (
+                    <Link key={project.id} href={`/projects/${project.id}`}>
+                      <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-[var(--muted)] transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-medium text-sm truncate">{project.name}</h3>
+                            <Badge variant={project.contractId ? "warning" : "secondary"} className="shrink-0 text-[10px]">
+                              {project.contractId ? "Contract" : "Personal"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
+                            {project.deadline && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> Due {new Date(project.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold">{project.progress}%</p>
+                          <div className="w-20 h-1.5 rounded-full bg-[var(--muted)] mt-1">
+                            <div
+                              className="h-full rounded-full bg-[var(--primary)] transition-all"
+                              style={{ width: `${project.progress}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
-                        {project.deadline && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> Due {new Date(project.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                          </span>
-                        )}
-                        {project.client && (
-                          <span>Client: {project.client.name}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold">{project.progress}%</p>
-                      <div className="w-20 h-1.5 rounded-full bg-[var(--muted)] mt-1">
-                        <div
-                          className="h-full rounded-full bg-[var(--primary)] transition-all"
-                          style={{ width: `${project.progress}%` }}
-                        />
-                      </div>
-                    </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center space-y-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] mx-auto">
+                    <FolderKanban className="h-6 w-6" />
                   </div>
-                </Link>
-              ))}
+                  <div>
+                    <h4 className="font-medium text-sm">No Active Projects</h4>
+                    <p className="text-xs text-[var(--muted-foreground)] max-w-xs mx-auto mt-1">
+                      Start building software or accept a client solution request to track your work here.
+                    </p>
+                  </div>
+                  <Link href="/projects" className="inline-block">
+                    <Button size="sm" className="gap-1.5 text-xs">
+                      <PlusCircle className="h-3.5 w-3.5" /> Create Project
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Quick Actions */}
         <motion.div {...fadeUp} transition={{ delay: 0.15 }} className="lg:col-span-2">
-          <Card>
+          <Card className="h-full">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Quick Actions</CardTitle>
             </CardHeader>
@@ -160,7 +202,12 @@ export default function DashboardPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Monthly Earnings</CardTitle>
+                <div>
+                  <CardTitle className="text-base">Monthly Earnings</CardTitle>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Total: {formatCurrency(stats.totalEarnings)}
+                  </p>
+                </div>
                 <Link href="/earnings">
                   <Button variant="ghost" size="sm" className="text-xs">View details</Button>
                 </Link>
@@ -169,7 +216,7 @@ export default function DashboardPage() {
             <CardContent>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={earningsData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                  <AreaChart data={userEarningsData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.2} />
@@ -178,7 +225,7 @@ export default function DashboardPage() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
-                    <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" tickFormatter={(v) => `₹${v / 1000}K`} />
+                    <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" tickFormatter={(v) => `₹${v}`} />
                     <Tooltip
                       formatter={(value: any) => [formatCurrency(Number(value) || 0), "Earnings"]}
                       contentStyle={{

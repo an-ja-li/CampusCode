@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Code2, Search, Bell, Menu, X, Moon, Sun, ChevronDown,
+  Code2, Search, Bell, Menu, X, Moon, Sun,
   LayoutDashboard, FolderKanban, CheckSquare, Store, Lightbulb,
   FileText, FileCheck, MessageSquare, Wallet, User, Star, Settings,
   PlusCircle, ShoppingBag, Users, Package, CreditCard, Tag,
@@ -15,8 +15,9 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { currentUser, notifications as mockNotifications } from "@/lib/mock-data";
 import { STUDENT_SIDEBAR_ITEMS, CLIENT_SIDEBAR_ITEMS, ADMIN_SIDEBAR_ITEMS } from "@/lib/constants";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserData } from "@/lib/user-store";
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard, FolderKanban, CheckSquare, Store, Lightbulb,
@@ -28,12 +29,17 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const { notifications } = useUserData();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  const role = pathname?.startsWith("/admin") ? "admin" : "student";
+  const role = pathname?.startsWith("/admin") ? "admin" : (user?.role || "student");
   const sidebarItems = role === "admin" ? ADMIN_SIDEBAR_ITEMS : STUDENT_SIDEBAR_ITEMS;
-  const unreadCount = mockNotifications.filter((n) => !n.isRead).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const displayName = user?.name || "Student Developer";
+  const displaySubtitle = user?.studentProfile?.college || (role === "admin" ? "Platform Admin" : "Developer");
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)]">
@@ -72,26 +78,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <Icon className="h-4.5 w-4.5 shrink-0" />
                 {item.label}
-                {item.label === "Messages" && (
-                  <Badge className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">3</Badge>
-                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* User */}
-        <div className="p-3 border-t border-[var(--border)]">
+        {/* User Card */}
+        <div className="p-3 border-t border-[var(--border)] space-y-1">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--muted)] transition-colors">
-            <Avatar name={currentUser.name} size="sm" />
+            <Avatar name={displayName} size="sm" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{currentUser.name}</p>
-              <p className="text-xs text-[var(--muted-foreground)] truncate">{currentUser.studentProfile?.college}</p>
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs text-[var(--muted-foreground)] truncate">{displaySubtitle}</p>
             </div>
-            <Link href="/settings" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+            <Link href="/settings" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1">
               <Settings className="h-4 w-4" />
             </Link>
           </div>
+          <button
+            onClick={() => logout()}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md transition-colors cursor-pointer"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>Sign out</span>
+          </button>
         </div>
       </aside>
 
@@ -203,19 +213,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <h3 className="font-semibold text-sm">Notifications</h3>
                     </div>
                     <div className="max-h-80 overflow-y-auto">
-                      {mockNotifications.slice(0, 5).map((n) => (
-                        <Link
-                          key={n.id}
-                          href={n.link || "#"}
-                          onClick={() => setNotifOpen(false)}
-                          className={`block p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)] transition-colors ${
-                            !n.isRead ? "bg-[var(--primary)]/5" : ""
-                          }`}
-                        >
-                          <p className="text-sm font-medium">{n.title}</p>
-                          <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">{n.message}</p>
-                        </Link>
-                      ))}
+                      {notifications.length > 0 ? (
+                        notifications.map((n) => (
+                          <Link
+                            key={n.id}
+                            href={n.link || "#"}
+                            onClick={() => setNotifOpen(false)}
+                            className={`block p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)] transition-colors ${
+                              !n.isRead ? "bg-[var(--primary)]/5" : ""
+                            }`}
+                          >
+                            <p className="text-sm font-medium">{n.title}</p>
+                            <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">{n.message}</p>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="p-6 text-center text-xs text-[var(--muted-foreground)]">
+                          No notifications yet
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -224,7 +240,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Avatar */}
             <Link href="/settings" className="flex items-center gap-2 rounded-lg p-1 hover:bg-[var(--muted)] transition-colors">
-              <Avatar name={currentUser.name} size="sm" />
+              <Avatar name={displayName} size="sm" />
             </Link>
           </div>
         </header>
