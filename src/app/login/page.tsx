@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Code2, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Code2, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/input";
@@ -16,13 +16,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !password) return;
 
-    await login(email, password);
-    router.push("/dashboard");
+    setError("");
+    const result = await login(email, password);
+
+    if (result.success) {
+      router.push("/dashboard");
+    } else {
+      setError(result.error || "Invalid email or password");
+    }
   };
 
   return (
@@ -48,6 +55,18 @@ export default function LoginPage() {
             Sign in to your account to continue building and managing your software
           </p>
 
+          {/* Error Banner */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </motion.div>
+          )}
+
           {/* Email/Password Form */}
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
@@ -61,7 +80,7 @@ export default function LoginPage() {
                   placeholder="you@example.com"
                   className="pl-10"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setError(""); }}
                 />
               </div>
             </div>
@@ -82,7 +101,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   className="pl-10 pr-10"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(""); }}
                 />
                 <button
                   type="button"

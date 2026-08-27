@@ -9,9 +9,9 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, Store, Lightbulb,
   FileText, FileCheck, MessageSquare, Wallet, User, Star, Settings,
   PlusCircle, ShoppingBag, Users, Package, CreditCard, Tag,
-  AlertTriangle, TrendingUp, LogOut,
+  AlertTriangle, TrendingUp, LogOut, LogIn, UserPlus,
 } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const { notifications } = useUserData();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -37,9 +37,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = pathname?.startsWith("/admin") ? "admin" : (user?.role || "student");
   const sidebarItems = role === "admin" ? ADMIN_SIDEBAR_ITEMS : STUDENT_SIDEBAR_ITEMS;
   const unreadCount = notifications.filter((n) => !n.isRead).length;
-
-  const displayName = user?.name || "Student Developer";
-  const displaySubtitle = user?.studentProfile?.college || (role === "admin" ? "Platform Admin" : "Developer");
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)]">
@@ -83,26 +80,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* User Card */}
-        <div className="p-3 border-t border-[var(--border)] space-y-1">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--muted)] transition-colors">
-            <Avatar name={displayName} size="sm" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{displayName}</p>
-              <p className="text-xs text-[var(--muted-foreground)] truncate">{displaySubtitle}</p>
+        {/* User Card / Login CTA */}
+        {isAuthenticated && user ? (
+          <div className="p-3 border-t border-[var(--border)] space-y-1">
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--muted)] transition-colors">
+              <Avatar name={user.name} size="sm" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user.name}</p>
+                <p className="text-xs text-[var(--muted-foreground)] truncate">
+                  {user.studentProfile?.college || "Developer"}
+                </p>
+              </div>
+              <Link href="/settings" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1">
+                <Settings className="h-4 w-4" />
+              </Link>
             </div>
-            <Link href="/settings" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1">
-              <Settings className="h-4 w-4" />
-            </Link>
+            <button
+              onClick={() => logout()}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md transition-colors cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sign out</span>
+            </button>
           </div>
-          <button
-            onClick={() => logout()}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md transition-colors cursor-pointer"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Sign out</span>
-          </button>
-        </div>
+        ) : (
+          <div className="p-3 border-t border-[var(--border)] space-y-2">
+            <p className="text-xs text-[var(--muted-foreground)] px-1">
+              Sign in to manage your projects & earnings.
+            </p>
+            <div className="flex gap-2">
+              <Link href="/login" className="flex-1">
+                <Button variant="outline" size="sm" className="w-full text-xs">
+                  Sign In
+                </Button>
+              </Link>
+              <Link href="/register" className="flex-1">
+                <Button size="sm" className="w-full text-xs">
+                  Sign Up
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Mobile Sidebar Overlay */}
@@ -157,6 +176,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   );
                 })}
               </nav>
+
+              {/* Mobile User/Login */}
+              {isAuthenticated && user ? (
+                <div className="p-4 border-t border-[var(--border)] space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={user.name} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{user.name}</p>
+                      <p className="text-xs text-[var(--muted-foreground)] truncate">{user.studentProfile?.college || "Developer"}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      logout();
+                    }}
+                    className="w-full text-left text-xs text-red-500 py-1"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <div className="p-4 border-t border-[var(--border)] space-y-2">
+                  <Link href="/login" onClick={() => setSidebarOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full text-xs mb-2">Sign In</Button>
+                  </Link>
+                  <Link href="/register" onClick={() => setSidebarOpen(false)}>
+                    <Button size="sm" className="w-full text-xs">Sign Up</Button>
+                  </Link>
+                </div>
+              )}
             </motion.aside>
           </>
         )}
@@ -193,55 +243,72 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Moon className="absolute h-4.5 w-4.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             </Button>
 
-            {/* Notifications */}
-            <div className="relative">
-              <Button variant="ghost" size="icon" onClick={() => setNotifOpen(!notifOpen)} className="text-[var(--muted-foreground)] relative">
-                <Bell className="h-4.5 w-4.5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
-                )}
-              </Button>
-              <AnimatePresence>
-                {notifOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    className="absolute right-0 mt-2 w-80 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg z-50"
-                  >
-                    <div className="p-4 border-b border-[var(--border)]">
-                      <h3 className="font-semibold text-sm">Notifications</h3>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifications.length > 0 ? (
-                        notifications.map((n) => (
-                          <Link
-                            key={n.id}
-                            href={n.link || "#"}
-                            onClick={() => setNotifOpen(false)}
-                            className={`block p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)] transition-colors ${
-                              !n.isRead ? "bg-[var(--primary)]/5" : ""
-                            }`}
-                          >
-                            <p className="text-sm font-medium">{n.title}</p>
-                            <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">{n.message}</p>
-                          </Link>
-                        ))
-                      ) : (
-                        <div className="p-6 text-center text-xs text-[var(--muted-foreground)]">
-                          No notifications yet
+            {isAuthenticated && user ? (
+              <>
+                {/* Notifications */}
+                <div className="relative">
+                  <Button variant="ghost" size="icon" onClick={() => setNotifOpen(!notifOpen)} className="text-[var(--muted-foreground)] relative">
+                    <Bell className="h-4.5 w-4.5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
+                    )}
+                  </Button>
+                  <AnimatePresence>
+                    {notifOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                        className="absolute right-0 mt-2 w-80 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-lg z-50"
+                      >
+                        <div className="p-4 border-b border-[var(--border)]">
+                          <h3 className="font-semibold text-sm">Notifications</h3>
                         </div>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                        <div className="max-h-80 overflow-y-auto">
+                          {notifications.length > 0 ? (
+                            notifications.map((n) => (
+                              <Link
+                                key={n.id}
+                                href={n.link || "#"}
+                                onClick={() => setNotifOpen(false)}
+                                className={`block p-3 border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)] transition-colors ${
+                                  !n.isRead ? "bg-[var(--primary)]/5" : ""
+                                }`}
+                              >
+                                <p className="text-sm font-medium">{n.title}</p>
+                                <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">{n.message}</p>
+                              </Link>
+                            ))
+                          ) : (
+                            <div className="p-6 text-center text-xs text-[var(--muted-foreground)]">
+                              No notifications yet
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-            {/* Avatar */}
-            <Link href="/settings" className="flex items-center gap-2 rounded-lg p-1 hover:bg-[var(--muted)] transition-colors">
-              <Avatar name={displayName} size="sm" />
-            </Link>
+                {/* Avatar */}
+                <Link href="/settings" className="flex items-center gap-2 rounded-lg p-1 hover:bg-[var(--muted)] transition-colors">
+                  <Avatar name={user.name} size="sm" />
+                </Link>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" className="text-xs">
+                    <LogIn className="h-3.5 w-3.5 mr-1" /> Sign in
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm" className="text-xs">
+                    <UserPlus className="h-3.5 w-3.5 mr-1" /> Sign up
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         </header>
 

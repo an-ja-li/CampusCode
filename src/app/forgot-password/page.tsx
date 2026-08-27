@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
                     <Label className="mb-1.5 block">Email Address</Label>
                     <Input
                       type="email"
-                      placeholder="harsh@campuscode.com"
+                      placeholder="you@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />

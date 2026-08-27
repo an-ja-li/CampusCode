@@ -1,233 +1,260 @@
 // ============================================================
 // CampusCode — Authentication & User Profile Hook
 // ============================================================
+// Uses NextAuth useSession() for real server-backed authentication.
+// All user data is stored in Neon PostgreSQL via Prisma.
+// ============================================================
 
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { User, UserRole, StudentProfile } from "@/types";
+import { useSession, signIn, signOut } from "next-auth/react";
+import type { StudentProfile } from "@/types";
 
-const AUTH_STORAGE_KEY = "campuscode_active_user";
-
-// Clean initial user template (0 stats)
-const defaultCleanUser: User = {
-  id: "u_default",
-  name: "Harsh Vardhan",
-  email: "harsh@campuscode.dev",
-  avatar: "",
-  role: "student",
-  isVerified: true,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  studentProfile: {
-    id: "sp_default",
-    userId: "u_default",
-    college: "IIT Bombay",
-    degree: "B.Tech Computer Science",
-    graduationYear: 2026,
-    skills: ["Next.js", "TypeScript", "React", "Python", "PostgreSQL"],
-    bio: "Full-stack developer building software solutions.",
-    level: "builder",
-    badges: [],
-    rating: 5.0,
-    reviewCount: 0,
-    totalSales: 0,
-    totalEarnings: 0,
-    completedProjects: 0,
-    portfolioUrl: "harsh",
-  },
-};
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  role: string;
+  isVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+  studentProfile: StudentProfile | null;
+}
 
 interface AuthState {
-  user: User | null;
+  user: UserProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: defaultCleanUser,
-    isAuthenticated: true,
-    isLoading: true,
-  });
+  const { data: session, status } = useSession();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  // Load user from localStorage on mount
+  const isSessionLoading = status === "loading";
+  const isAuthenticated = status === "authenticated" && !!session?.user;
+
+  // Fetch full profile from database when session is available
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setState({
-          user: parsed,
-          isAuthenticated: Boolean(parsed),
-          isLoading: false,
+    if (isAuthenticated && session?.user?.id && !profile) {
+      setProfileLoading(true);
+      fetch("/api/auth/profile")
+        .then(async (res) => {
+          if (res.status === 404) {
+            // User was removed or re-seeded in database; clear stale session
+            await signOut({ redirect: false });
+            return null;
+          }
+          if (res.ok) return res.json();
+          return null;
+        })
+        .then((data) => {
+          if (data) {
+            setProfile({
+              id: data.id,
+              name: data.name,
+              email: data.email,
+              avatar: data.avatar || null,
+              role: data.role?.toLowerCase() || "student",
+              isVerified: data.isVerified ?? true,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+              studentProfile: data.studentProfile
+                ? {
+                    id: data.studentProfile.id,
+                    userId: data.studentProfile.userId,
+                    college: data.studentProfile.college,
+                    degree: data.studentProfile.degree,
+                    graduationYear: data.studentProfile.graduationYear,
+                    skills: data.studentProfile.skills || [],
+                    bio: data.studentProfile.bio || "",
+                    level: data.studentProfile.level?.toLowerCase() || "beginner",
+                    badges: data.studentProfile.badges || [],
+                    rating: data.studentProfile.rating || 0,
+                    reviewCount: data.studentProfile.reviewCount || 0,
+                    totalSales: data.studentProfile.totalSales || 0,
+                    totalEarnings: data.studentProfile.totalEarnings || 0,
+                    completedProjects: data.studentProfile.completedProjects || 0,
+                    portfolioUrl: data.studentProfile.portfolioUrl || "",
+                    github: data.studentProfile.github,
+                    linkedin: data.studentProfile.linkedin,
+                  }
+                : null,
+            });
+          }
+        })
+        .catch((err) => {
+          console.error("[useAuth] Failed to fetch profile:", err);
+        })
+        .finally(() => {
+          setProfileLoading(false);
         });
-        return;
-      }
-    } catch {
-      // Fallback
     }
 
-    // Default clean initial session
-    setState({
-      user: defaultCleanUser,
-      isAuthenticated: true,
-      isLoading: false,
-    });
-  }, []);
+    if (!isAuthenticated) {
+      setProfile(null);
+    }
+  }, [isAuthenticated, session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const login = useCallback(async (email: string, password?: string, customName?: string) => {
-    setState((s) => ({ ...s, isLoading: true }));
-    await new Promise((r) => setTimeout(r, 400));
+  // Build the user object — prefer full profile, fall back to session
+  const user = profile
+    ? profile
+    : isAuthenticated && session?.user
+    ? {
+        id: (session.user as { id?: string }).id || "",
+        name: session.user.name || "",
+        email: session.user.email || "",
+        avatar: session.user.image || null,
+        role: (session.user as { role?: string }).role || "student",
+        isVerified: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        studentProfile: null,
+      }
+    : null;
 
-    const nameFromEmail = customName || email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  const login = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const result = await signIn("credentials", {
+          email: email.trim().toLowerCase(),
+          password,
+          redirect: false,
+        });
 
-    const loggedInUser: User = {
-      id: `u_${email.replace(/[^a-zA-Z0-9]/g, "_")}`,
-      name: nameFromEmail || "Student Developer",
-      email: email,
-      avatar: "",
-      role: "student",
-      isVerified: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      studentProfile: {
-        id: `sp_${Date.now()}`,
-        userId: `u_${email.replace(/[^a-zA-Z0-9]/g, "_")}`,
-        college: "Engineering College",
-        degree: "Computer Science",
-        graduationYear: 2026,
-        skills: ["React", "TypeScript", "Next.js"],
-        bio: "Student developer on CampusCode",
-        level: "beginner",
-        badges: [],
-        rating: 5.0,
-        reviewCount: 0,
-        totalSales: 0,
-        totalEarnings: 0,
-        completedProjects: 0,
-        portfolioUrl: email.split("@")[0],
-      },
-    };
+        if (result?.error) {
+          return { success: false, error: "Invalid email or password" };
+        }
 
-    try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(loggedInUser));
-    } catch {}
+        return { success: true };
+      } catch (error) {
+        console.error("[useAuth] Login error:", error);
+        return { success: false, error: "Login failed. Please try again." };
+      }
+    },
+    []
+  );
 
-    setState({ user: loggedInUser, isAuthenticated: true, isLoading: false });
-    return { success: true, user: loggedInUser };
-  }, []);
+  const register = useCallback(
+    async (data: {
+      name: string;
+      email: string;
+      password: string;
+      role?: string;
+      college?: string;
+      degree?: string;
+      graduationYear?: number;
+      skills?: string[];
+      bio?: string;
+    }) => {
+      try {
+        // Create account via API
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
 
-  const register = useCallback(async (data: {
-    name: string;
-    email: string;
-    role?: UserRole;
-    college?: string;
-    degree?: string;
-    graduationYear?: number;
-    skills?: string[];
-    bio?: string;
-  }) => {
-    setState((s) => ({ ...s, isLoading: true }));
-    await new Promise((r) => setTimeout(r, 400));
+        const result = await res.json();
 
-    const userId = `u_${Date.now()}`;
-    const newUser: User = {
-      id: userId,
-      name: data.name,
-      email: data.email,
-      avatar: "",
-      role: data.role || "student",
-      isVerified: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      studentProfile: {
-        id: `sp_${Date.now()}`,
-        userId,
-        college: data.college || "University",
-        degree: data.degree || "Computer Science",
-        graduationYear: Number(data.graduationYear) || 2026,
-        skills: data.skills || ["React", "TypeScript", "Next.js"],
-        bio: data.bio || "",
-        level: "beginner",
-        badges: [],
-        rating: 5.0,
-        reviewCount: 0,
-        totalSales: 0,
-        totalEarnings: 0,
-        completedProjects: 0,
-        portfolioUrl: data.name.toLowerCase().replace(/\s+/g, "-"),
-      },
-    };
+        if (!res.ok) {
+          return { success: false, error: result.error || "Registration failed" };
+        }
 
-    try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-    } catch {}
+        // Auto-login after registration
+        const signInResult = await signIn("credentials", {
+          email: data.email.trim().toLowerCase(),
+          password: data.password,
+          redirect: false,
+        });
 
-    setState({ user: newUser, isAuthenticated: true, isLoading: false });
-    return { success: true, user: newUser };
-  }, []);
+        if (signInResult?.error) {
+          return {
+            success: true,
+            error: "Account created but auto-login failed. Please sign in manually.",
+          };
+        }
+
+        return { success: true };
+      } catch (error) {
+        console.error("[useAuth] Register error:", error);
+        return { success: false, error: "Registration failed. Please try again." };
+      }
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch {}
-    setState({ user: null, isAuthenticated: false, isLoading: false });
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
+    setProfile(null);
+    await signOut({ redirectTo: "/login" });
   }, []);
 
-  const updateProfile = useCallback(async (updates: {
-    name?: string;
-    email?: string;
-    avatar?: string;
-    studentProfile?: Partial<StudentProfile>;
-  }) => {
-    setState((s) => {
-      if (!s.user) return s;
-      const currentProfile = s.user.studentProfile || {
-        id: `sp_${Date.now()}`,
-        userId: s.user.id,
-        college: "",
-        degree: "",
-        graduationYear: 2026,
-        skills: [],
-        bio: "",
-        level: "beginner" as const,
-        badges: [],
-        rating: 5.0,
-        reviewCount: 0,
-        totalSales: 0,
-        totalEarnings: 0,
-        completedProjects: 0,
-      };
-
-      const updatedUser: User = {
-        ...s.user,
-        name: updates.name ?? s.user.name,
-        email: updates.email ?? s.user.email,
-        avatar: updates.avatar ?? s.user.avatar,
-        studentProfile: {
-          ...currentProfile,
-          ...(updates.studentProfile || {}),
-        },
-      };
-
+  const updateProfile = useCallback(
+    async (updates: {
+      name?: string;
+      avatar?: string;
+      studentProfile?: Partial<StudentProfile>;
+    }) => {
       try {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
-      } catch {}
+        const body: Record<string, unknown> = {};
+        if (updates.name !== undefined) body.name = updates.name;
+        if (updates.avatar !== undefined) body.avatar = updates.avatar;
+        if (updates.studentProfile) {
+          if (updates.studentProfile.college !== undefined) body.college = updates.studentProfile.college;
+          if (updates.studentProfile.degree !== undefined) body.degree = updates.studentProfile.degree;
+          if (updates.studentProfile.graduationYear !== undefined) body.graduationYear = updates.studentProfile.graduationYear;
+          if (updates.studentProfile.skills !== undefined) body.skills = updates.studentProfile.skills;
+          if (updates.studentProfile.bio !== undefined) body.bio = updates.studentProfile.bio;
+          if ((updates.studentProfile as Record<string, unknown>).github !== undefined) body.github = (updates.studentProfile as Record<string, unknown>).github;
+          if ((updates.studentProfile as Record<string, unknown>).linkedin !== undefined) body.linkedin = (updates.studentProfile as Record<string, unknown>).linkedin;
+        }
 
-      return {
-        ...s,
-        user: updatedUser,
-      };
-    });
-    return { success: true };
-  }, []);
+        const res = await fetch("/api/auth/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          return { success: false, error: "Failed to update profile" };
+        }
+
+        const updatedData = await res.json();
+
+        // Update local profile state
+        setProfile((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            name: updatedData.name ?? prev.name,
+            avatar: updatedData.avatar ?? prev.avatar,
+            studentProfile: updatedData.studentProfile
+              ? {
+                  ...prev.studentProfile,
+                  ...updatedData.studentProfile,
+                  skills: updatedData.studentProfile.skills || prev.studentProfile?.skills || [],
+                  badges: updatedData.studentProfile.badges || prev.studentProfile?.badges || [],
+                }
+              : prev.studentProfile,
+          };
+        });
+
+        return { success: true };
+      } catch (error) {
+        console.error("[useAuth] Update profile error:", error);
+        return { success: false, error: "Failed to update profile" };
+      }
+    },
+    []
+  );
 
   return {
-    ...state,
+    user,
+    isAuthenticated,
+    isLoading: isSessionLoading || profileLoading,
     login,
     register,
     logout,

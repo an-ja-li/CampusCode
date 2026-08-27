@@ -1,33 +1,84 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Star, ExternalLink, ShoppingCart, CheckCircle2, Code2,
-  ArrowLeft, Globe, FileText, GitBranch, Download, Shield,
+  ArrowLeft, Globe, FileText, GitBranch, Download, Shield, Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { products, students } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/utils";
+import { products as fallbackProducts, students } from "@/lib/mock-data";
+import type { Product, User } from "@/types";
 
 export default function ProductDetailPage({ params }: { params: Promise<{ product: string }> }) {
   const { product: productId } = use(params);
-  const product = products.find((p) => p.id === productId);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!product) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProduct() {
+      try {
+        const res = await fetch(`/api/products/${productId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data) {
+            setProduct(data);
+            return;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+
+      // Local fallback
+      const fallback = fallbackProducts.find((p) => p.id === productId || p.slug === productId);
+      if (!cancelled) {
+        setProduct(fallback || null);
+      }
+      if (!cancelled) setLoading(false);
+    }
+
+    loadProduct().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
+
+  if (loading) {
     return (
-      <div className="p-8 text-center">
-        <h1 className="text-xl font-bold">Product not found</h1>
-        <Link href="/marketplace"><Button variant="outline" className="mt-4">Back to Marketplace</Button></Link>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
       </div>
     );
   }
 
-  const seller = product.seller || students[0];
+  if (!product) {
+    return (
+      <div className="p-12 text-center max-w-md mx-auto">
+        <h1 className="text-2xl font-bold mb-2">Product Not Found</h1>
+        <p className="text-sm text-[var(--muted-foreground)] mb-6">
+          The software product you are looking for does not exist or has been removed.
+        </p>
+        <Link href="/marketplace">
+          <Button variant="outline" className="gap-2">
+            <ArrowLeft className="h-4 w-4" /> Back to Marketplace
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const seller: User = (product.seller as User) || students.find((s) => s.id === product.sellerId) || students[0];
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
@@ -36,7 +87,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
         <ArrowLeft className="h-4 w-4" /> Back to Marketplace
       </Link>
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      <div className="grid lg:grid-cols-3 gap-8 items-start">
         {/* Main Content */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-2 space-y-6">
           {/* Header */}
@@ -72,114 +123,64 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
             <CardHeader><CardTitle>Description</CardTitle></CardHeader>
             <CardContent>
               <p className="text-sm leading-relaxed text-[var(--muted-foreground)] whitespace-pre-line">
-                {product.longDescription}
+                {product.longDescription || product.description}
               </p>
             </CardContent>
           </Card>
 
           {/* Features */}
-          <Card>
-            <CardHeader><CardTitle>Features</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {product.features.map((feature) => (
-                  <div key={feature} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                    <span>{feature}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tech Stack */}
-          <Card>
-            <CardHeader><CardTitle>Tech Stack</CardTitle></CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {product.technologies.map((tech) => (
-                  <Badge key={tech} variant="secondary" className="px-3 py-1.5">{tech}</Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* What's Included */}
-          <Card>
-            <CardHeader><CardTitle>What&apos;s Included</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {product.includes.map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-[var(--primary)] shrink-0" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quality Score */}
-          <Card>
-            <CardHeader><CardTitle>Product Quality</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Object.entries(product.qualityScore)
-                  .filter(([key]) => key !== "overall")
-                  .map(([key, value]) => (
-                    <div key={key}>
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="capitalize">{key.replace(/([A-Z])/g, " $1").trim()}</span>
-                        <span className="font-medium">{value}%</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-[var(--muted)]">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            value >= 90 ? "bg-emerald-500" : value >= 70 ? "bg-amber-500" : "bg-red-500"
-                          }`}
-                          style={{ width: `${value}%` }}
-                        />
-                      </div>
+          {product.features && product.features.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>Features</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {product.features.map((feature) => (
+                    <div key={feature} className="flex items-start gap-2 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>{feature}</span>
                     </div>
                   ))}
-                <div className="pt-3 border-t border-[var(--border)] flex items-center justify-between">
-                  <span className="font-semibold">Overall Score</span>
-                  <span className="text-xl font-bold text-[var(--primary)]">{product.qualityScore.overall}%</span>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Installation */}
-          <Card>
-            <CardHeader><CardTitle>Installation Guide</CardTitle></CardHeader>
-            <CardContent>
-              <pre className="text-sm bg-[var(--muted)] rounded-lg p-4 overflow-x-auto whitespace-pre-wrap font-mono">
-                {product.installationGuide}
-              </pre>
-            </CardContent>
-          </Card>
+          {/* Tech Stack */}
+          {product.technologies && product.technologies.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>Tech Stack</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {product.technologies.map((tech) => (
+                    <Badge key={tech} variant="secondary" className="px-3 py-1.5">{tech}</Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Requirements */}
-          <Card>
-            <CardHeader><CardTitle>Requirements</CardTitle></CardHeader>
-            <CardContent>
-              <ul className="space-y-1.5">
-                {product.requirements.map((req) => (
-                  <li key={req} className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
-                    <div className="h-1.5 w-1.5 rounded-full bg-[var(--muted-foreground)]" />
-                    {req}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {product.requirements && product.requirements.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>Requirements</CardTitle></CardHeader>
+              <CardContent>
+                <ul className="space-y-1.5">
+                  {product.requirements.map((req) => (
+                    <li key={req} className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                      <div className="h-1.5 w-1.5 rounded-full bg-[var(--muted-foreground)]" />
+                      {req}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </motion.div>
 
-        {/* Sidebar */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
+        {/* Sticky Sidebar */}
+        <div className="space-y-4 lg:sticky lg:top-6 self-start">
           {/* Buy Card */}
-          <Card className="sticky top-4">
+          <Card>
             <CardContent className="p-5 space-y-4">
               <div className="text-center">
                 <p className="text-3xl font-bold mb-1">
@@ -215,7 +216,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[var(--muted-foreground)]">Updated</span>
-                  <span className="font-medium">{new Date(product.updatedAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
+                  <span className="font-medium">{new Date(product.updatedAt || Date.now()).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
                 </div>
               </div>
             </CardContent>
@@ -229,7 +230,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
                 <div>
                   <h3 className="font-semibold">{seller.name}</h3>
                   <p className="text-sm text-[var(--muted-foreground)]">
-                    {seller.studentProfile?.bio.split(".")[0]}
+                    {seller.studentProfile?.bio?.split(".")[0] || "Verified Developer"}
                   </p>
                 </div>
               </div>
@@ -243,7 +244,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
               <div className="grid grid-cols-3 gap-2 text-center pt-3 border-t border-[var(--border)]">
                 <div>
                   <p className="font-bold text-sm">{seller.studentProfile?.completedProjects || 0}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">Products</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Projects</p>
                 </div>
                 <div>
                   <p className="font-bold text-sm">{seller.studentProfile?.totalSales || 0}</p>
@@ -252,7 +253,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
                 <div>
                   <p className="font-bold text-sm flex items-center justify-center gap-0.5">
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                    {seller.studentProfile?.rating || 0}
+                    {seller.studentProfile?.rating || 4.9}
                   </p>
                   <p className="text-xs text-[var(--muted-foreground)]">Rating</p>
                 </div>
@@ -265,7 +266,30 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
               </Link>
             </CardContent>
           </Card>
-        </motion.div>
+
+          {/* Trust & Guarantee Card */}
+          <Card className="bg-[var(--muted)]/30 border-dashed">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                CampusCode Guarantee
+              </p>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <Shield className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                  <span className="text-[var(--foreground)]">Verified clean code & dependencies</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Download className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                  <span className="text-[var(--foreground)]">Instant repository & archive download</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <FileText className="h-3.5 w-3.5 text-purple-500 shrink-0 mt-0.5" />
+                  <span className="text-[var(--foreground)]">Complete setup & deployment guide included</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -1,31 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search, Lightbulb, Plus, Clock, Users, ArrowRight } from "lucide-react";
+import { Search, Lightbulb, Plus, Clock, Users, ArrowRight, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { solutionRequests } from "@/lib/mock-data";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
+import type { SolutionRequest } from "@/types";
 
 export default function SolutionsPage() {
+  const [requests, setRequests] = useState<SolutionRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
 
-  const filtered = solutionRequests.filter((sr) => {
-    if (search && !sr.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (category !== "all" && sr.category !== category) return false;
-    return true;
-  }).sort((a, b) => {
-    if (sortBy === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    if (sortBy === "budget_high") return (b.budgetMax || 0) - (a.budgetMax || 0);
-    if (sortBy === "proposals") return a.proposalCount - b.proposalCount;
-    return 0;
-  });
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRequirements() {
+      try {
+        const queryParams = new URLSearchParams();
+        if (category !== "all") queryParams.set("category", category);
+        if (search) queryParams.set("search", search);
+        queryParams.set("sort", sortBy);
+
+        const res = await fetch(`/api/solutions?${queryParams.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.requests) {
+            setRequests(data.requests);
+          }
+        }
+      } catch (err) {
+        console.error("[Solutions] Error fetching requirements:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadRequirements();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [search, category, sortBy]);
 
   const categories = ["all", "web", "ai-ml", "mobile", "automation", "data-science"];
 
@@ -80,51 +102,60 @@ export default function SolutionsPage() {
         </div>
       </motion.div>
 
-      {/* Results */}
-      <p className="text-sm text-[var(--muted-foreground)] mb-4">{filtered.length} requirements found</p>
+      {/* Results Count */}
+      {!loading && (
+        <p className="text-sm text-[var(--muted-foreground)] mb-4">{requests.length} requirements found</p>
+      )}
 
-      <div className="space-y-4">
-        {filtered.map((req, i) => (
-          <motion.div key={req.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 * i }}>
-            <Link href={`/solutions/${req.id}`}>
-              <Card className="card-hover">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <h3 className="font-semibold text-base">{req.title}</h3>
-                        <Badge variant={req.status === "open" ? "success" : "warning"}>
-                          {req.status === "open" ? "Open" : "In Progress"}
-                        </Badge>
-                        <Badge variant="outline">{req.difficulty}</Badge>
-                      </div>
-                      <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mb-3">{req.description}</p>
+      {/* List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {requests.map((req, i) => (
+            <motion.div key={req.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 * i }}>
+              <Link href={`/solutions/${req.id}`}>
+                <Card className="card-hover hover:border-[var(--primary)]/50 transition-all">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <h3 className="font-semibold text-base">{req.title}</h3>
+                          <Badge variant={typeof req.status === "string" && req.status.toLowerCase() === "open" ? "success" : "warning"}>
+                            {typeof req.status === "string" && req.status.toLowerCase() === "open" ? "Open" : "In Progress"}
+                          </Badge>
+                          <Badge variant="outline">{req.difficulty}</Badge>
+                        </div>
+                        <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mb-3">{req.description}</p>
 
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {req.preferredTechnologies.slice(0, 4).map((tech) => (
-                          <Badge key={tech} variant="secondary" className="text-xs">{tech}</Badge>
-                        ))}
-                      </div>
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {req.preferredTechnologies.slice(0, 4).map((tech) => (
+                            <Badge key={tech} variant="secondary" className="text-xs">{tech}</Badge>
+                          ))}
+                        </div>
 
-                      <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)] flex-wrap">
-                        <span className="font-semibold text-sm text-[var(--foreground)]">
-                          {req.budgetMin && req.budgetMax ? `${formatCurrency(req.budgetMin)} – ${formatCurrency(req.budgetMax)}` : "Open Budget"}
-                        </span>
-                        <span className="flex items-center gap-1"><Users className="h-3 w-3" />{req.proposalCount} proposals</span>
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Posted {formatRelativeTime(req.createdAt)}</span>
-                        {req.client && <span>by {req.client.name}</span>}
+                        <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)] flex-wrap">
+                          <span className="font-semibold text-sm text-[var(--foreground)]">
+                            {req.budgetMin && req.budgetMax ? `${formatCurrency(req.budgetMin)} – ${formatCurrency(req.budgetMax)}` : "Open Budget"}
+                          </span>
+                          <span className="flex items-center gap-1"><Users className="h-3 w-3" />{req.proposalCount} proposals</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Posted {formatRelativeTime(req.createdAt)}</span>
+                          {req.client && <span>by {req.client.clientProfile?.organization || req.client.name}</span>}
+                        </div>
                       </div>
+                      <ArrowRight className="h-5 w-5 text-[var(--muted-foreground)] shrink-0 mt-1" />
                     </div>
-                    <ArrowRight className="h-5 w-5 text-[var(--muted-foreground)] shrink-0 mt-1" />
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
-      </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
-      {filtered.length === 0 && (
+      {!loading && requests.length === 0 && (
         <div className="text-center py-16">
           <Lightbulb className="h-12 w-12 mx-auto text-[var(--muted-foreground)]/30 mb-4" />
           <h3 className="font-semibold mb-1">No requirements found</h3>

@@ -37,7 +37,6 @@ export default function SettingsPage() {
     e.preventDefault();
     updateProfile({
       name,
-      email,
       studentProfile: {
         bio,
         college,

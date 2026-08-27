@@ -213,3 +213,16 @@ body {
   background: rgba(99, 102, 241, 0.2);
   color: inherit;
 }
+
+/* ── Hide Number Input Arrows/Spinners ─────────────────── */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+

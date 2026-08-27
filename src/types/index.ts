@@ -162,8 +162,10 @@ export interface ProjectMilestone {
 export interface Product {
   id: string;
   name: string;
+  slug?: string;
   description: string;
-  longDescription: string;
+  shortDescription?: string;
+  longDescription?: string;
   category: string;
   tags: string[];
   technologies: string[];

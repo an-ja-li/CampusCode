@@ -457,8 +457,8 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
-                name: "Harsh Vardhan",
-                college: "NIT Trichy",
+                name: "Rohan Mehta",
+                college: "BITS Pilani",
                 quote: "CampusCode helped me earn ₹1.24L while still in college. My AI Resume Analyzer became a top seller in the marketplace.",
                 earned: "₹1,24,500",
                 projects: 12,

@@ -14,18 +14,18 @@ import type {
 export const students: User[] = [
   {
     id: 'u1',
-    name: 'Harsh Vardhan',
-    email: 'harsh@campuscode.com',
+    name: 'Aarav Sharma',
+    email: 'aarav.sharma@example.com',
     avatar: '',
     role: 'student',
     isVerified: true,
     createdAt: '2025-03-15',
     updatedAt: '2026-08-01',
     studentProfile: {
-      id: 'sp1', userId: 'u1', college: 'NIT Trichy', degree: 'B.Tech CSE',
+      id: 'sp1', userId: 'u1', college: 'Delhi Tech University', degree: 'B.Tech CSE',
       graduationYear: 2026, skills: ['React', 'Node.js', 'Python', 'TypeScript', 'Next.js', 'PostgreSQL', 'Machine Learning'],
-      github: 'harshvardhan', linkedin: 'harshvardhan', bio: 'Full-stack developer passionate about building products that solve real problems. Open source contributor.',
-      level: 'expert', rating: 4.9, reviewCount: 47, totalSales: 87, totalEarnings: 124500, completedProjects: 12, portfolioUrl: '@harsh',
+      github: 'aaravsharma', linkedin: 'aaravsharma', bio: 'Full-stack developer building software tools.',
+      level: 'expert', rating: 4.9, reviewCount: 47, totalSales: 0, totalEarnings: 0, completedProjects: 0, portfolioUrl: '@aarav',
       badges: [
         { id: 'b1', name: 'Verified Student', icon: '✓', description: 'Identity verified', earnedAt: '2025-03-20' },
         { id: 'b2', name: '10 Projects Completed', icon: '🏆', description: 'Completed 10+ projects', earnedAt: '2026-01-15' },
@@ -259,7 +259,7 @@ export const products: Product[] = [
     reviews: [], rating: 4.8, reviewCount: 124, salesCount: 124, license: 'Commercial',
     includes: ['Source Code', 'Documentation', 'Database Schema', 'Deployment Guide', 'API Documentation', 'Future Updates'],
     qualityScore: { documentation: 92, codeQuality: 87, demoAvailability: 100, readme: 95, testing: 72, overall: 89 },
-    githubRepo: 'harshvardhan/ai-resume-analyzer', createdAt: '2026-01-15', updatedAt: '2026-07-15',
+    githubRepo: 'devstudent/ai-resume-analyzer', createdAt: '2026-01-15', updatedAt: '2026-07-15',
   },
   {
     id: 'p2', name: 'College ERP System', description: 'Complete college management system with student, faculty, and admin modules.',
@@ -872,7 +872,7 @@ export const reviews: Review[] = [
     id: 'r1', contractId: 'cont-old-1', reviewerId: 'c1', reviewer: clients[0],
     revieweeId: 'u1', reviewee: students[0],
     communication: 5, quality: 5, delivery: 4, professionalism: 5, overall: 4.8,
-    content: 'Harsh delivered an excellent product. Great communication throughout the project. Code quality was outstanding and he went above and beyond with documentation. Slightly delayed on one milestone but made up for it with the quality.',
+    content: 'Aarav delivered an excellent product. Great communication throughout the project. Code quality was outstanding and he went above and beyond with documentation. Slightly delayed on one milestone but made up for it with the quality.',
     isVerified: true, createdAt: '2026-05-15',
   },
   {

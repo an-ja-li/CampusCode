@@ -1,40 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Search, Star, Filter, SlidersHorizontal, Grid3X3, List,
-  ArrowUpDown, Code2,
+  ArrowUpDown, Code2, Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { products } from "@/lib/mock-data";
 import { CATEGORIES } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+import type { Product } from "@/types";
 
 export default function MarketplacePage() {
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
   const [sortBy, setSortBy] = useState("popular");
 
-  const filtered = products.filter((p) => {
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.description.toLowerCase().includes(search.toLowerCase())) return false;
-    if (selectedCategory !== "all" && p.category !== selectedCategory) return false;
-    if (priceFilter === "free" && !p.isFree) return false;
-    if (priceFilter === "paid" && p.isFree) return false;
-    return true;
-  }).sort((a, b) => {
-    if (sortBy === "popular") return b.salesCount - a.salesCount;
-    if (sortBy === "rating") return b.rating - a.rating;
-    if (sortBy === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    if (sortBy === "price_low") return a.price - b.price;
-    if (sortBy === "price_high") return b.price - a.price;
-    return 0;
-  });
+  // Fetch real marketplace products directly from database via API
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProducts() {
+      try {
+        const queryParams = new URLSearchParams();
+        if (selectedCategory !== "all") queryParams.set("category", selectedCategory);
+        if (search) queryParams.set("search", search);
+        if (priceFilter === "free") queryParams.set("free", "true");
+        if (priceFilter === "paid") queryParams.set("free", "false");
+        queryParams.set("sort", sortBy);
+
+        const res = await fetch(`/api/products?${queryParams.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) {
+            setProductList(data.products || []);
+          }
+        }
+      } catch (err) {
+        console.error("[Marketplace] Error fetching products:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [search, selectedCategory, priceFilter, sortBy]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -42,7 +63,7 @@ export default function MarketplacePage() {
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold mb-1">Software Marketplace</h1>
         <p className="text-[var(--muted-foreground)] mb-6">
-          Discover and purchase software built by student developers
+          Discover and purchase software built by verified student developers
         </p>
       </motion.div>
 
@@ -82,23 +103,23 @@ export default function MarketplacePage() {
           </div>
         </div>
 
-        {/* Category Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide">
+        {/* Category Pills */}
+        <div className="flex gap-2 overflow-x-auto pb-4 mb-6">
           <button
             onClick={() => setSelectedCategory("all")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
               selectedCategory === "all"
                 ? "bg-[var(--primary)] text-white"
                 : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/80"
             }`}
           >
-            All
+            All Products
           </button>
           {CATEGORIES.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
                 selectedCategory === cat.id
                   ? "bg-[var(--primary)] text-white"
                   : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/80"
@@ -110,71 +131,88 @@ export default function MarketplacePage() {
         </div>
       </motion.div>
 
-      {/* Results Count */}
-      <p className="text-sm text-[var(--muted-foreground)] mb-4">
-        {filtered.length} {filtered.length === 1 ? "product" : "products"} found
-      </p>
-
       {/* Product Grid */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filtered.map((product, i) => (
-          <motion.div
-            key={product.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.03 * i }}
-          >
-            <Link href={`/marketplace/${product.id}`}>
-              <Card className="card-hover h-full">
-                <CardContent className="p-5">
-                  {/* Thumbnail */}
-                  <div className="h-40 rounded-lg bg-gradient-to-br from-[var(--muted)] to-[var(--muted)]/50 mb-4 flex items-center justify-center relative overflow-hidden">
-                    <Code2 className="h-10 w-10 text-[var(--muted-foreground)]/30" />
-                    {product.isFree && (
-                      <Badge variant="success" className="absolute top-2 right-2">Free</Badge>
-                    )}
-                  </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {productList.map((product, idx) => (
+            <motion.div
+              key={product.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.03 }}
+            >
+              <Link href={`/marketplace/${product.id}`}>
+                <Card className="h-full hover:border-[var(--primary)]/50 transition-all hover:shadow-lg group flex flex-col justify-between">
+                  <CardContent className="p-5 flex flex-col justify-between h-full">
+                    <div>
+                      {/* Image placeholder */}
+                      <div className="h-40 rounded-lg bg-gradient-to-br from-[var(--muted)] to-[var(--muted)]/50 mb-4 flex items-center justify-center group-hover:from-[var(--primary)]/5 group-hover:to-purple-500/5 transition-colors">
+                        <Code2 className="h-10 w-10 text-[var(--muted-foreground)]/40 group-hover:text-[var(--primary)] transition-colors" />
+                      </div>
 
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-semibold text-base leading-tight">{product.name}</h3>
-                    <span className="font-bold text-[var(--primary)] whitespace-nowrap text-sm">
-                      {product.isFree ? "Free" : formatCurrency(product.price)}
-                    </span>
-                  </div>
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-semibold text-base group-hover:text-[var(--primary)] transition-colors">
+                          {product.name}
+                        </h3>
+                        <span className="font-bold text-sm shrink-0">
+                          {product.isFree ? (
+                            <Badge variant="success">Free</Badge>
+                          ) : (
+                            formatCurrency(product.price)
+                          )}
+                        </span>
+                      </div>
 
-                  <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mb-3">
-                    {product.description}
-                  </p>
-
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {product.technologies.slice(0, 3).map((tech) => (
-                      <Badge key={tech} variant="secondary" className="text-xs">{tech}</Badge>
-                    ))}
-                    {product.technologies.length > 3 && (
-                      <Badge variant="secondary" className="text-xs">+{product.technologies.length - 3}</Badge>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)] pt-3 border-t border-[var(--border)]">
-                    <div className="flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      <span className="font-medium text-[var(--foreground)]">{product.rating}</span>
-                      <span>({product.reviewCount})</span>
+                      {/* Description */}
+                      <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mb-4">
+                        {product.shortDescription || product.description}
+                      </p>
                     </div>
-                    <span>{product.salesCount.toLocaleString()} sales</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
-      </div>
 
-      {filtered.length === 0 && (
+                    <div>
+                      {/* Technologies */}
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {product.technologies.slice(0, 3).map((tech) => (
+                          <Badge key={tech} variant="secondary" className="text-xs font-normal">
+                            {tech}
+                          </Badge>
+                        ))}
+                        {product.technologies.length > 3 && (
+                          <span className="text-xs text-[var(--muted-foreground)] self-center">
+                            +{product.technologies.length - 3}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Footer info */}
+                      <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)] pt-3 border-t border-[var(--border)]">
+                        <div className="flex items-center gap-1">
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                          <span className="font-medium">{product.rating}</span>
+                          <span>({product.reviewCount})</span>
+                        </div>
+                        <span>{product.salesCount.toLocaleString()} sales</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {!loading && productList.length === 0 && (
         <div className="text-center py-16">
-          <Code2 className="h-12 w-12 mx-auto text-[var(--muted-foreground)]/30 mb-4" />
-          <h3 className="font-semibold mb-1">No products found</h3>
-          <p className="text-sm text-[var(--muted-foreground)]">Try adjusting your search or filters</p>
+          <p className="text-lg font-medium mb-1">No products found</p>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Try adjusting your search query or filters.
+          </p>
         </div>
       )}
     </div>

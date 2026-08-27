@@ -1,17 +1,91 @@
+// ============================================================
+// CampusCode — Native React 19 Theme Provider
+// ============================================================
+// Zero-script injection, SSR-safe light/dark theme provider for React 19 & Next.js 16
+// ============================================================
+
 "use client";
 
-import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { type ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+type Theme = "light" | "dark";
+
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  resolvedTheme: Theme;
+}
+
+const ThemeContext = createContext<ThemeContextType>({
+  theme: "light",
+  setTheme: () => {},
+  resolvedTheme: "light",
+});
+
+export function ThemeProvider({
+  children,
+  defaultTheme = "light",
+}: {
+  children: ReactNode;
+  defaultTheme?: Theme;
+  attribute?: string;
+  enableSystem?: boolean;
+  disableTransitionOnChange?: boolean;
+}) {
+  const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem("campuscode_theme") as Theme | null;
+      if (savedTheme === "dark" || savedTheme === "light") {
+        setThemeState(savedTheme);
+        if (savedTheme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } else {
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const initial = prefersDark ? "dark" : "light";
+        setThemeState(initial);
+        if (prefersDark) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    setMounted(true);
+  }, []);
+
+  const setTheme = (newTheme: Theme) => {
+    setThemeState(newTheme);
+    try {
+      localStorage.setItem("campuscode_theme", newTheme);
+      if (newTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } catch {}
+  };
+
   return (
-    <NextThemesProvider
-      attribute="class"
-      defaultTheme="light"
-      enableSystem
-      disableTransitionOnChange
+    <ThemeContext.Provider
+      value={{
+        theme: mounted ? theme : defaultTheme,
+        setTheme,
+        resolvedTheme: mounted ? theme : defaultTheme,
+      }}
     >
       {children}
-    </NextThemesProvider>
+    </ThemeContext.Provider>
   );
+}
+
+export function useTheme() {
+  return useContext(ThemeContext);
 }

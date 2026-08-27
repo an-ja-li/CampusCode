@@ -41,7 +41,7 @@ class GitHubService {
     return {
       id: 1,
       login: username,
-      name: 'Harsh Vardhan',
+      name: username,
       avatar_url: '',
       bio: 'Full-stack developer passionate about building products',
       public_repos: 42,

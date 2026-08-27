@@ -4,8 +4,8 @@
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { students, clients } from "@/lib/mock-data";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
@@ -31,7 +31,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!email || !password) return null;
 
-        // 1. Try querying cloud PostgreSQL database
+        // Query the cloud PostgreSQL database
         try {
           const dbUser = await db.user.findUnique({
             where: { email },
@@ -41,35 +41,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
           });
 
-          if (dbUser) {
-            // Note: If dbUser.password exists, compare with hash; for development, accept password
-            return {
-              id: dbUser.id,
-              name: dbUser.name,
-              email: dbUser.email,
-              image: dbUser.avatar || null,
-              role: dbUser.role.toLowerCase(),
-            };
-          }
-        } catch {
-          // Database offline or uninitialized
+          if (!dbUser || !dbUser.password) return null;
+
+          // Verify password with bcrypt
+          const isValidPassword = await bcrypt.compare(password, dbUser.password);
+          if (!isValidPassword) return null;
+
+          return {
+            id: dbUser.id,
+            name: dbUser.name,
+            email: dbUser.email,
+            image: dbUser.avatar || null,
+            role: dbUser.role.toLowerCase(),
+          };
+        } catch (error) {
+          console.error("[Auth] Database error during login:", error);
+          return null;
         }
-
-        // 2. Fallback to mock data during initial development setup
-        const allUsers = [...students, ...clients];
-        const mockUser = allUsers.find(
-          (u) => u.email.toLowerCase() === email
-        );
-
-        if (!mockUser) return null;
-
-        return {
-          id: mockUser.id,
-          name: mockUser.name,
-          email: mockUser.email,
-          image: mockUser.avatar || null,
-          role: mockUser.role,
-        };
       },
     }),
   ],
@@ -89,5 +77,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
+  trustHost: true,
   secret: process.env.NEXTAUTH_SECRET || "campuscode-production-secret-replace-with-env",
 });

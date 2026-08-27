@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   FolderKanban, Package, Send, FileCheck, DollarSign, TrendingUp,
-  ArrowRight, Clock, Zap, ChevronRight, PlusCircle, ShoppingBag,
+  ArrowRight, Clock, Zap, ChevronRight, PlusCircle, LogIn, UserPlus,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,10 +23,10 @@ const fadeUp = {
 };
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { projects, stats } = useUserData();
 
-  const userFirstName = user?.name ? user.name.split(" ")[0] : "Developer";
+  const userFirstName = isAuthenticated && user?.name ? user.name.split(" ")[0] : null;
   const activeProjects = projects.filter((p) => p.status === "active");
 
   const dashboardStats = [
@@ -56,7 +56,8 @@ export default function DashboardPage() {
     .filter((sr) => sr.status === "open")
     .slice(0, 3)
     .map((sr) => {
-      const matchScore = aiMatchScores[sr.id]?.score || Math.floor(Math.random() * 20 + 75);
+      const defaultScore = 85 + (sr.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 12);
+      const matchScore = aiMatchScores[sr.id]?.score || defaultScore;
       const matchingSkills = sr.preferredTechnologies.filter((t) =>
         userSkills.some((s) => s.toLowerCase() === t.toLowerCase())
       );
@@ -71,12 +72,39 @@ export default function DashboardPage() {
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <motion.div {...fadeUp} transition={{ delay: 0 }}>
-        <h1 className="text-2xl font-bold mb-1">
-          Welcome back, {userFirstName} 👋
-        </h1>
-        <p className="text-[var(--muted-foreground)]">
-          Here&apos;s what&apos;s happening with your projects and marketplace.
-        </p>
+        {isAuthenticated && user ? (
+          <div>
+            <h1 className="text-2xl font-bold mb-1">
+              Welcome back, {userFirstName} 👋
+            </h1>
+            <p className="text-[var(--muted-foreground)]">
+              Here&apos;s what&apos;s happening with your projects and marketplace.
+            </p>
+          </div>
+        ) : (
+          <div className="p-6 rounded-2xl border border-[var(--border)] bg-gradient-to-r from-[var(--primary)]/10 via-purple-500/5 to-transparent flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">
+                Welcome to CampusCode 👋
+              </h1>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                You are currently viewing in guest mode. Sign in or create a developer profile to build and earn.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link href="/login">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <LogIn className="h-4 w-4" /> Sign In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button size="sm" className="gap-1.5">
+                  <UserPlus className="h-4 w-4" /> Create Account
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* Stats Grid */}

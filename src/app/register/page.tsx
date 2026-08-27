@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Code2, Mail, Lock, User, GraduationCap, Building2, Eye, EyeOff, ArrowRight, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Code2, Mail, Lock, User, GraduationCap, Building2, Eye, EyeOff, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Label } from "@/components/ui/input";
 import { TECHNOLOGIES } from "@/lib/constants";
@@ -20,6 +20,7 @@ export default function RegisterPage() {
   const [role, setRole] = useState<Role>("student");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(["React", "Next.js", "TypeScript"]);
+  const [error, setError] = useState("");
 
   // Form State
   const [name, setName] = useState("");
@@ -40,11 +41,13 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email) return;
+    if (!name || !email || !password) return;
 
-    await register({
+    setError("");
+    const result = await register({
       name,
       email,
+      password,
       role: role || "student",
       college: college || "Engineering College",
       degree: degree || "B.Tech Computer Science",
@@ -53,7 +56,11 @@ export default function RegisterPage() {
       bio: bio || "",
     });
 
-    router.push("/dashboard");
+    if (result.success) {
+      router.push("/dashboard");
+    } else {
+      setError(result.error || "Registration failed. Please try again.");
+    }
   };
 
   return (
@@ -232,6 +239,16 @@ export default function RegisterPage() {
               </p>
 
               <form className="space-y-4" onSubmit={handleSubmit}>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm"
+                  >
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {error}
+                  </motion.div>
+                )}
                 {role === "student" ? (
                   <>
                     <div className="grid grid-cols-2 gap-3">
