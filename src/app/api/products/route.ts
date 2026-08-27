@@ -81,8 +81,9 @@ export async function POST(request: NextRequest) {
         category: body.category || 'templates',
         price: Number(body.price) || 0,
         isFree: Boolean(body.isFree),
-        status: 'PENDING_REVIEW',
+        status: 'PUBLISHED',
         sellerId: session.user.id,
+        projectId: body.projectId || null,
         technologies: body.technologies || [],
         tags: body.tags || [],
         features: body.features || [],
@@ -90,9 +91,26 @@ export async function POST(request: NextRequest) {
         license: body.license || 'Commercial',
         demoUrl: body.demoUrl || null,
         githubUrl: body.githubUrl || null,
+        documentation: body.documentation || null,
+        installation: body.installation || null,
+        screenshots: body.screenshots || [],
         version: body.version || '1.0.0',
       },
+      include: {
+        seller: {
+          include: {
+            studentProfile: true,
+          },
+        },
+      },
     });
+
+    if (body.projectId) {
+      await db.project.update({
+        where: { id: body.projectId },
+        data: { isPublished: true },
+      }).catch((err) => console.error('[API Products Update Project Error]:', err));
+    }
 
     return NextResponse.json(newProduct, { status: 201 });
   } catch (error) {

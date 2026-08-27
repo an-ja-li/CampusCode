@@ -11,7 +11,7 @@ import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { useUserData } from "@/lib/user-store";
 
 export default function ContractsPage() {
-  const { contracts } = useUserData();
+  const { contracts, isLoaded } = useUserData();
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -22,7 +22,23 @@ export default function ContractsPage() {
         </div>
       </motion.div>
 
-      {contracts.length > 0 ? (
+      {!isLoaded ? (
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-3 animate-pulse">
+              <div className="flex justify-between items-center">
+                <div className="h-5 w-36 rounded bg-[var(--muted)]" />
+                <div className="h-5 w-20 rounded-full bg-[var(--muted)]" />
+              </div>
+              <div className="flex gap-6">
+                <div className="h-4 w-28 rounded bg-[var(--muted)]" />
+                <div className="h-4 w-32 rounded bg-[var(--muted)]" />
+                <div className="h-4 w-24 rounded bg-[var(--muted)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : contracts.length > 0 ? (
         <div className="space-y-4">
           {contracts.map((contract, i) => (
             <motion.div key={contract.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>

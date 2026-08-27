@@ -81,7 +81,7 @@ export default function MarketplacePage() {
           </div>
           <div className="flex gap-2">
             <select
-              className="h-10 rounded-lg border border-[var(--border)] bg-transparent px-3 text-sm"
+              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 text-sm custom-select cursor-pointer"
               value={priceFilter}
               onChange={(e) => setPriceFilter(e.target.value)}
             >
@@ -90,7 +90,7 @@ export default function MarketplacePage() {
               <option value="paid">Paid</option>
             </select>
             <select
-              className="h-10 rounded-lg border border-[var(--border)] bg-transparent px-3 text-sm"
+              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 text-sm custom-select cursor-pointer"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
             >
@@ -146,13 +146,23 @@ export default function MarketplacePage() {
               transition={{ delay: idx * 0.03 }}
             >
               <Link href={`/marketplace/${product.id}`}>
-                <Card className="h-full hover:border-[var(--primary)]/50 transition-all hover:shadow-lg group flex flex-col justify-between">
+                <Card className="h-full hover:border-[var(--primary)]/50 transition-all hover:shadow-lg group flex flex-col justify-between overflow-hidden">
                   <CardContent className="p-5 flex flex-col justify-between h-full">
                     <div>
-                      {/* Image placeholder */}
-                      <div className="h-40 rounded-lg bg-gradient-to-br from-[var(--muted)] to-[var(--muted)]/50 mb-4 flex items-center justify-center group-hover:from-[var(--primary)]/5 group-hover:to-purple-500/5 transition-colors">
-                        <Code2 className="h-10 w-10 text-[var(--muted-foreground)]/40 group-hover:text-[var(--primary)] transition-colors" />
-                      </div>
+                      {/* Product Thumbnail / Screenshot */}
+                      {product.screenshots && product.screenshots.length > 0 ? (
+                        <div className="h-40 rounded-lg overflow-hidden mb-4 bg-black/20 border border-[var(--border)]">
+                          <img
+                            src={product.screenshots[0]}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-40 rounded-lg bg-gradient-to-br from-[var(--muted)] to-[var(--muted)]/50 mb-4 flex items-center justify-center group-hover:from-[var(--primary)]/5 group-hover:to-purple-500/5 transition-colors">
+                          <Code2 className="h-10 w-10 text-[var(--muted-foreground)]/40 group-hover:text-[var(--primary)] transition-colors" />
+                        </div>
+                      )}
 
                       {/* Header */}
                       <div className="flex items-start justify-between gap-2 mb-2">

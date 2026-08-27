@@ -125,7 +125,7 @@ export default function PostRequirementPage() {
               </div>
               <div>
                 <Label className="mb-1.5 block">Platform</Label>
-                <select className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm">
+                <select className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 py-2 text-sm custom-select cursor-pointer">
                   <option>Web</option>
                   <option>Mobile (Android)</option>
                   <option>Mobile (iOS)</option>
@@ -215,7 +215,7 @@ export default function PostRequirementPage() {
               </div>
               <div>
                 <Label className="mb-1.5 block">Priority</Label>
-                <select className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm">
+                <select className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 py-2 text-sm custom-select cursor-pointer">
                   <option value="low">Low — Flexible timeline</option>
                   <option value="medium">Medium — Within deadline</option>
                   <option value="high">High — Urgent requirement</option>

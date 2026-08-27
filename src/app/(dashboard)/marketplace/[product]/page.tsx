@@ -19,6 +19,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
   const { product: productId } = use(params);
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedScreenshotIndex, setSelectedScreenshotIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +80,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
   }
 
   const seller: User = (product.seller as User) || students.find((s) => s.id === product.sellerId) || students[0];
+  const hasScreenshots = product.screenshots && product.screenshots.length > 0;
+  const currentImage = hasScreenshots ? product.screenshots[selectedScreenshotIndex] || product.screenshots[0] : null;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
@@ -90,12 +93,41 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
       <div className="grid lg:grid-cols-3 gap-8 items-start">
         {/* Main Content */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-2 space-y-6">
-          {/* Header */}
+          {/* Header & Screenshots */}
           <div>
-            {/* Screenshot placeholder */}
-            <div className="h-64 sm:h-80 rounded-xl bg-gradient-to-br from-[var(--muted)] to-[var(--muted)]/50 mb-6 flex items-center justify-center">
-              <Code2 className="h-16 w-16 text-[var(--muted-foreground)]/20" />
-            </div>
+            {/* Screenshot Display */}
+            {hasScreenshots ? (
+              <div className="space-y-3 mb-6">
+                <div className="h-72 sm:h-96 rounded-xl overflow-hidden border border-[var(--border)] bg-black/20 shadow-md">
+                  <img
+                    src={currentImage!}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {product.screenshots.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {product.screenshots.map((img, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedScreenshotIndex(idx)}
+                        className={`h-16 w-24 shrink-0 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                          selectedScreenshotIndex === idx
+                            ? "border-[var(--primary)] ring-2 ring-[var(--primary)]/30 scale-105"
+                            : "border-[var(--border)] opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <img src={img} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-64 sm:h-80 rounded-xl bg-gradient-to-br from-[var(--muted)] to-[var(--muted)]/50 mb-6 flex items-center justify-center border border-[var(--border)]">
+                <Code2 className="h-16 w-16 text-[var(--muted-foreground)]/20" />
+              </div>
+            )}
 
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>

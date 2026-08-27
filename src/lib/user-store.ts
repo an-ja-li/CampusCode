@@ -184,16 +184,16 @@ export function useUserData() {
   const stats = {
     activeProjectsCount: projects.filter((p) => {
       const s = typeof p.status === 'string' ? p.status.toLowerCase() : '';
-      return s === 'active' || s === 'planning';
+      return s === 'active' || s === 'planning' || s === 'in_progress' || !s;
     }).length,
     publishedProductsCount: products.filter((p) => {
       const s = typeof p.status === 'string' ? p.status.toLowerCase() : '';
-      return s === 'published';
+      return s === 'published' || s === 'pending_review' || s === 'active' || !s;
     }).length,
     proposalsCount: proposals.length,
     activeContractsCount: contracts.filter((c) => {
       const s = typeof c.status === 'string' ? c.status.toLowerCase() : '';
-      return s === 'active';
+      return s === 'active' || s === 'created';
     }).length,
     totalSales: user?.studentProfile?.totalSales || products.reduce((sum, p) => sum + (p.salesCount || 0), 0),
     totalEarnings: user?.studentProfile?.totalEarnings || products.reduce((sum, p) => sum + ((p.salesCount || 0) * (p.price || 0)), 0),

@@ -18,6 +18,7 @@ import {
   Lightbulb,
   LogIn,
   UserPlus,
+  Star,
 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -43,9 +44,9 @@ export function Navbar() {
   const displayName = user?.name || "Student Developer";
 
   const navLinks = [
-    { href: "/marketplace", label: "Marketplace", icon: Store },
-    { href: "/solutions", label: "Solutions", icon: Lightbulb },
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/#how-it-works", label: "How It Works", icon: Lightbulb },
+    { href: "/#developers", label: "Developers", icon: Code2 },
+    { href: "/#stories", label: "Success Stories", icon: Star },
   ];
 
   const isDashboard =
@@ -60,7 +61,9 @@ export function Navbar() {
     pathname?.startsWith("/sell") ||
     pathname?.startsWith("/portfolio") ||
     pathname?.startsWith("/reviews") ||
-    pathname?.startsWith("/tasks");
+    pathname?.startsWith("/tasks") ||
+    pathname?.startsWith("/marketplace") ||
+    pathname?.startsWith("/solutions");
 
   if (isDashboard) return null;
 
@@ -85,11 +88,7 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    pathname === link.href
-                      ? "bg-[var(--primary)]/10 text-[var(--primary)]"
-                      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]"
-                  }`}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
                 >
                   {link.label}
                 </Link>
@@ -121,6 +120,14 @@ export function Navbar() {
 
               {isAuthenticated && user ? (
                 <>
+                  {/* Dashboard link button for logged-in users on landing page */}
+                  <Link href="/dashboard" className="hidden sm:inline-flex">
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs font-medium">
+                      <LayoutDashboard className="h-3.5 w-3.5" />
+                      Dashboard
+                    </Button>
+                  </Link>
+
                   {/* Notifications */}
                   <div className="relative">
                     <Button
@@ -172,6 +179,8 @@ export function Navbar() {
                             {[
                               { label: "Dashboard", href: "/dashboard" },
                               { label: "My Projects", href: "/projects" },
+                              { label: "Marketplace", href: "/marketplace" },
+                              { label: "Solutions", href: "/solutions" },
                               { label: "Earnings", href: "/earnings" },
                               { label: "Settings", href: "/settings" },
                             ].map((item) => (
@@ -250,6 +259,32 @@ export function Navbar() {
                     {link.label}
                   </Link>
                 ))}
+
+                {isAuthenticated && user ? (
+                  <div className="pt-2 border-t border-[var(--border)] space-y-1">
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-[var(--primary)]/10 text-[var(--primary)]"
+                    >
+                      <LayoutDashboard className="h-4 w-4" />
+                      Dashboard
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-[var(--border)] flex gap-2">
+                    <Link href="/login" onClick={() => setMobileOpen(false)} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full text-xs">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link href="/register" onClick={() => setMobileOpen(false)} className="flex-1">
+                      <Button size="sm" className="w-full text-xs">
+                        Sign Up
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

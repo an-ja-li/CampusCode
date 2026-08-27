@@ -10,7 +10,7 @@ import { formatCurrency, getStatusColor } from "@/lib/utils";
 import { useUserData } from "@/lib/user-store";
 
 export default function ProposalsPage() {
-  const { proposals } = useUserData();
+  const { proposals, isLoaded } = useUserData();
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -26,7 +26,23 @@ export default function ProposalsPage() {
         </Link>
       </motion.div>
 
-      {proposals.length > 0 ? (
+      {!isLoaded ? (
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-3 animate-pulse">
+              <div className="flex justify-between items-center">
+                <div className="h-5 w-44 rounded bg-[var(--muted)]" />
+                <div className="h-5 w-20 rounded-full bg-[var(--muted)]" />
+              </div>
+              <div className="h-4 w-full rounded bg-[var(--muted)]" />
+              <div className="flex gap-4">
+                <div className="h-4 w-20 rounded bg-[var(--muted)]" />
+                <div className="h-4 w-24 rounded bg-[var(--muted)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : proposals.length > 0 ? (
         <div className="space-y-4">
           {proposals.map((proposal, i) => (
             <motion.div key={proposal.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>

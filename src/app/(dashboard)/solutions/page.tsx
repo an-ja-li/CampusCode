@@ -78,7 +78,7 @@ export default function SolutionsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted-foreground)]" />
             <Input placeholder="Search requirements..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="h-10 rounded-lg border border-[var(--border)] bg-transparent px-3 text-sm" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <select className="h-10 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 text-sm custom-select cursor-pointer" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="newest">Newest</option>
             <option value="budget_high">Highest Budget</option>
             <option value="proposals">Fewest Proposals</option>

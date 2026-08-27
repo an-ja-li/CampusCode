@@ -11,7 +11,7 @@ import { getStatusColor } from "@/lib/utils";
 import { useUserData } from "@/lib/user-store";
 
 export default function ProjectsPage() {
-  const { projects, addProject } = useUserData();
+  const { projects, isLoaded, addProject } = useUserData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -50,8 +50,43 @@ export default function ProjectsPage() {
         </Button>
       </motion.div>
 
-      {/* Projects Grid */}
-      {projects.length > 0 ? (
+      {/* Loading Skeleton */}
+      {!isLoaded ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-4 animate-pulse"
+            >
+              <div className="flex items-center justify-between">
+                <div className="h-5 w-20 rounded-full bg-[var(--muted)]" />
+                <div className="h-4 w-12 rounded bg-[var(--muted)]" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-5 w-3/4 rounded bg-[var(--muted)]" />
+                <div className="h-3.5 w-full rounded bg-[var(--muted)]" />
+                <div className="h-3.5 w-2/3 rounded bg-[var(--muted)]" />
+              </div>
+              <div className="flex gap-2">
+                <div className="h-5 w-14 rounded-md bg-[var(--muted)]" />
+                <div className="h-5 w-16 rounded-md bg-[var(--muted)]" />
+                <div className="h-5 w-12 rounded-md bg-[var(--muted)]" />
+              </div>
+              <div className="space-y-1.5 pt-2">
+                <div className="flex justify-between">
+                  <div className="h-3 w-14 rounded bg-[var(--muted)]" />
+                  <div className="h-3 w-8 rounded bg-[var(--muted)]" />
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-[var(--muted)]" />
+              </div>
+              <div className="flex justify-between items-center pt-3 border-t border-[var(--border)]">
+                <div className="h-4 w-20 rounded bg-[var(--muted)]" />
+                <div className="h-4 w-16 rounded bg-[var(--muted)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : projects.length > 0 ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {projects.map((project, i) => (
             <motion.div key={project.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
@@ -127,13 +162,15 @@ export default function ProjectsPage() {
             </div>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="text-xs font-medium block mb-1">Project Name</label>
+                <label className="text-xs font-medium block mb-1">
+                  Project Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   required
                   placeholder="e.g. AI Resume Screener"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full h-10 px-3 rounded-lg border border-[var(--border)] bg-transparent text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 />
               </div>
               <div>
@@ -143,8 +180,24 @@ export default function ProjectsPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  className="w-full p-3 rounded-lg border border-[var(--border)] bg-transparent text-sm resize-none"
+                  className="w-full p-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] text-sm custom-select cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                >
+                  <option value="Full-Stack">Full-Stack</option>
+                  <option value="Frontend">Frontend</option>
+                  <option value="Backend">Backend</option>
+                  <option value="AI / ML">AI / ML</option>
+                  <option value="Mobile">Mobile</option>
+                  <option value="DevOps">DevOps</option>
+                  <option value="Blockchain">Blockchain</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs font-medium block mb-1">Technologies (comma separated)</label>
@@ -152,7 +205,7 @@ export default function ProjectsPage() {
                   placeholder="e.g. Next.js, TypeScript, Tailwind, Python"
                   value={techInput}
                   onChange={(e) => setTechInput(e.target.value)}
-                  className="w-full h-10 px-3 rounded-lg border border-[var(--border)] bg-transparent text-sm"
+                  className="w-full h-10 px-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">

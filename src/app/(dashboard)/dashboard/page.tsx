@@ -24,10 +24,13 @@ const fadeUp = {
 
 export default function DashboardPage() {
   const { user, isAuthenticated } = useAuth();
-  const { projects, stats } = useUserData();
+  const { projects, isLoaded, stats } = useUserData();
 
   const userFirstName = isAuthenticated && user?.name ? user.name.split(" ")[0] : null;
-  const activeProjects = projects.filter((p) => p.status === "active");
+  const activeProjects = projects.filter((p) => {
+    const s = typeof p.status === "string" ? p.status.toLowerCase() : "";
+    return s === "active" || s === "planning" || s === "in_progress" || !s;
+  });
 
   const dashboardStats = [
     { label: "Active Projects", value: stats.activeProjectsCount, icon: FolderKanban, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30" },
@@ -141,7 +144,12 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-center">
-              {activeProjects.length > 0 ? (
+              {!isLoaded ? (
+                <div className="space-y-3 p-1 animate-pulse">
+                  <div className="h-16 rounded-xl bg-[var(--muted)]" />
+                  <div className="h-16 rounded-xl bg-[var(--muted)]" />
+                </div>
+              ) : activeProjects.length > 0 ? (
                 <div className="space-y-3">
                   {activeProjects.map((project) => (
                     <Link key={project.id} href={`/projects/${project.id}`}>
