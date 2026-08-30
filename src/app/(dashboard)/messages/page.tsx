@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Search, ArrowLeft, MessageSquare, Loader2, Paperclip,
@@ -138,7 +138,7 @@ function getDisplayName(user: UserData | null) {
 
 // ── Main Component ─────────────────────────────────────────
 
-export default function MessagesPage() {
+function MessagesContent() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -928,3 +928,18 @@ export default function MessagesPage() {
     </div>
   );
 }
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--muted-foreground)]" />
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
