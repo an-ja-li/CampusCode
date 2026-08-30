@@ -76,7 +76,6 @@ export const STUDENT_SIDEBAR_ITEMS = [
   { label: 'Earnings', href: '/earnings', icon: 'Wallet' },
   { label: 'Portfolio', href: '/portfolio', icon: 'User' },
   { label: 'Reviews', href: '/reviews', icon: 'Star' },
-  { label: 'Settings', href: '/settings', icon: 'Settings' },
 ] as const;
 
 export const CLIENT_SIDEBAR_ITEMS = [
@@ -84,12 +83,9 @@ export const CLIENT_SIDEBAR_ITEMS = [
   { label: 'Browse Software', href: '/marketplace', icon: 'Store' },
   { label: 'My Requirements', href: '/solutions', icon: 'Lightbulb' },
   { label: 'Post Requirement', href: '/solutions/post', icon: 'PlusCircle' },
-  { label: 'Proposals', href: '/proposals', icon: 'FileText' },
   { label: 'Active Contracts', href: '/contracts', icon: 'FileCheck' },
   { label: 'Messages', href: '/messages', icon: 'MessageSquare' },
   { label: 'Purchases', href: '/purchases', icon: 'ShoppingBag' },
-  { label: 'Reviews', href: '/reviews', icon: 'Star' },
-  { label: 'Settings', href: '/settings', icon: 'Settings' },
 ] as const;
 
 export const ADMIN_SIDEBAR_ITEMS = [

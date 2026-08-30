@@ -5,12 +5,13 @@ import Link from "next/link";
 import {
   FolderKanban, Package, Send, FileCheck, DollarSign, TrendingUp,
   ArrowRight, Clock, Zap, ChevronRight, PlusCircle, LogIn, UserPlus,
+  Store, Lightbulb, ShoppingBag, Users, Eye, Star,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { solutionRequests, aiMatchScores } from "@/lib/mock-data";
+import { solutionRequests, aiMatchScores, products as fallbackProducts } from "@/lib/mock-data";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserData } from "@/lib/user-store";
 import {
@@ -26,13 +27,18 @@ export default function DashboardPage() {
   const { user, isAuthenticated } = useAuth();
   const { projects, isLoaded, stats } = useUserData();
 
+  const role = (user?.role || "student").toLowerCase();
+  const isClient = role === "client";
+  const isStudent = !isClient;
+
   const userFirstName = isAuthenticated && user?.name ? user.name.split(" ")[0] : null;
   const activeProjects = projects.filter((p) => {
     const s = typeof p.status === "string" ? p.status.toLowerCase() : "";
     return s === "active" || s === "planning" || s === "in_progress" || !s;
   });
 
-  const dashboardStats = [
+  // ── Student Stats ──
+  const studentStats = [
     { label: "Active Projects", value: stats.activeProjectsCount, icon: FolderKanban, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30" },
     { label: "Published Products", value: stats.publishedProductsCount, icon: Package, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" },
     { label: "Applications", value: stats.proposalsCount, icon: Send, color: "text-purple-500 bg-purple-100 dark:bg-purple-900/30" },
@@ -41,7 +47,37 @@ export default function DashboardPage() {
     { label: "Total Earnings", value: formatCurrency(stats.totalEarnings), icon: TrendingUp, color: "text-rose-500 bg-rose-100 dark:bg-rose-900/30", isString: true },
   ];
 
-  // User-specific monthly earnings data (0 baseline for new users)
+  // ── Client Stats ──
+  const clientStats = [
+    { label: "Posted Requirements", value: stats.activeProjectsCount, icon: Lightbulb, color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30" },
+    { label: "Active Contracts", value: stats.activeContractsCount, icon: FileCheck, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30" },
+    { label: "Proposals Received", value: stats.proposalsCount, icon: Send, color: "text-purple-500 bg-purple-100 dark:bg-purple-900/30" },
+    { label: "Purchases", value: stats.totalSales, icon: ShoppingBag, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" },
+    { label: "Total Spent", value: formatCurrency(stats.totalEarnings), icon: DollarSign, color: "text-cyan-500 bg-cyan-100 dark:bg-cyan-900/30", isString: true },
+    { label: "Developers Hired", value: stats.activeContractsCount, icon: Users, color: "text-rose-500 bg-rose-100 dark:bg-rose-900/30" },
+  ];
+
+  const dashboardStats = isClient ? clientStats : studentStats;
+
+  // ── Student Quick Actions ──
+  const studentQuickActions = [
+    { label: "Create New Project", href: "/projects", icon: FolderKanban },
+    { label: "Publish to Marketplace", href: "/sell", icon: Package },
+    { label: "Browse Opportunities", href: "/solutions", icon: Zap },
+    { label: "View Earnings", href: "/earnings", icon: DollarSign },
+  ];
+
+  // ── Client Quick Actions ──
+  const clientQuickActions = [
+    { label: "Post New Requirement", href: "/solutions/post", icon: PlusCircle },
+    { label: "Browse Software", href: "/marketplace", icon: Store },
+    { label: "View Contracts", href: "/contracts", icon: FileCheck },
+    { label: "View My Requirements", href: "/solutions", icon: Lightbulb },
+  ];
+
+  const quickActions = isClient ? clientQuickActions : studentQuickActions;
+
+  // User-specific monthly data (0 baseline for new users)
   const userEarningsData = [
     { month: "Jan", earnings: 0 },
     { month: "Feb", earnings: 0 },
@@ -71,6 +107,9 @@ export default function DashboardPage() {
       };
     });
 
+  // Client featured products
+  const featuredProducts = fallbackProducts.slice(0, 3);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -81,7 +120,9 @@ export default function DashboardPage() {
               Welcome back, {userFirstName} 👋
             </h1>
             <p className="text-[var(--muted-foreground)]">
-              Here&apos;s what&apos;s happening with your projects and marketplace.
+              {isClient
+                ? "Manage your requirements, contracts, and software purchases."
+                : "Here\u0027s what\u0027s happening with your projects and marketplace."}
             </p>
           </div>
         ) : (
@@ -128,19 +169,27 @@ export default function DashboardPage() {
       </motion.div>
 
       <div className="grid lg:grid-cols-5 gap-6">
-        {/* Current Work */}
+        {/* Current Work / Active Requirements */}
         <motion.div {...fadeUp} transition={{ delay: 0.1 }} className="lg:col-span-3">
           <Card className="h-full flex flex-col">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Current Work</CardTitle>
-                {activeProjects.length > 0 && (
+                <CardTitle className="text-base">
+                  {isClient ? "Your Requirements" : "Current Work"}
+                </CardTitle>
+                {isClient ? (
+                  <Link href="/solutions">
+                    <Button variant="ghost" size="sm" className="text-xs">
+                      View all <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </Link>
+                ) : activeProjects.length > 0 ? (
                   <Link href="/projects">
                     <Button variant="ghost" size="sm" className="text-xs">
                       View all <ArrowRight className="h-3.5 w-3.5" />
                     </Button>
                   </Link>
-                )}
+                ) : null}
               </div>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-center">
@@ -148,6 +197,24 @@ export default function DashboardPage() {
                 <div className="space-y-3 p-1 animate-pulse">
                   <div className="h-16 rounded-xl bg-[var(--muted)]" />
                   <div className="h-16 rounded-xl bg-[var(--muted)]" />
+                </div>
+              ) : isClient ? (
+                /* Client: Show their requirements or prompt to post */
+                <div className="py-8 text-center space-y-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 mx-auto">
+                    <Lightbulb className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm">Post Your First Requirement</h4>
+                    <p className="text-xs text-[var(--muted-foreground)] max-w-xs mx-auto mt-1">
+                      Describe what you need and let talented student developers submit proposals.
+                    </p>
+                  </div>
+                  <Link href="/solutions/post" className="inline-block">
+                    <Button size="sm" className="gap-1.5 text-xs">
+                      <PlusCircle className="h-3.5 w-3.5" /> Post Requirement
+                    </Button>
+                  </Link>
                 </div>
               ) : activeProjects.length > 0 ? (
                 <div className="space-y-3">
@@ -211,12 +278,7 @@ export default function DashboardPage() {
               <CardTitle className="text-base">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {[
-                { label: "Create New Project", href: "/projects", icon: FolderKanban },
-                { label: "Publish to Marketplace", href: "/sell", icon: Package },
-                { label: "Browse Opportunities", href: "/solutions", icon: Zap },
-                { label: "View Earnings", href: "/earnings", icon: DollarSign },
-              ].map((action) => (
+              {quickActions.map((action) => (
                 <Link key={action.href} href={action.href}>
                   <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--muted)] transition-colors">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)]/10">
@@ -233,18 +295,22 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Earnings Chart */}
+        {/* Earnings Chart (Student) / Spending Overview (Client) */}
         <motion.div {...fadeUp} transition={{ delay: 0.2 }}>
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Monthly Earnings</CardTitle>
+                  <CardTitle className="text-base">
+                    {isClient ? "Spending Overview" : "Monthly Earnings"}
+                  </CardTitle>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    Total: {formatCurrency(stats.totalEarnings)}
+                    {isClient
+                      ? `Total spent: ${formatCurrency(stats.totalEarnings)}`
+                      : `Total: ${formatCurrency(stats.totalEarnings)}`}
                   </p>
                 </div>
-                <Link href="/earnings">
+                <Link href={isClient ? "/contracts" : "/earnings"}>
                   <Button variant="ghost" size="sm" className="text-xs">View details</Button>
                 </Link>
               </div>
@@ -263,7 +329,7 @@ export default function DashboardPage() {
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
                     <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" tickFormatter={(v) => `₹${v}`} />
                     <Tooltip
-                      formatter={(value: any) => [formatCurrency(Number(value) || 0), "Earnings"]}
+                      formatter={(value: any) => [formatCurrency(Number(value) || 0), isClient ? "Spent" : "Earnings"]}
                       contentStyle={{
                         backgroundColor: "var(--card)",
                         border: "1px solid var(--border)",
@@ -285,47 +351,85 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Recommended Opportunities */}
+        {/* Recommended Section — Role-specific */}
         <motion.div {...fadeUp} transition={{ delay: 0.25 }}>
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-amber-500" />
-                  Recommended for You
+                  {isClient ? (
+                    <>
+                      <Star className="h-4 w-4 text-amber-500" />
+                      Featured Software
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 text-amber-500" />
+                      Recommended for You
+                    </>
+                  )}
                 </CardTitle>
-                <Link href="/solutions">
+                <Link href={isClient ? "/marketplace" : "/solutions"}>
                   <Button variant="ghost" size="sm" className="text-xs">View all</Button>
                 </Link>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {matchedRequests.map((req) => (
-                <Link key={req.id} href={`/solutions/${req.id}`}>
-                  <div className="p-3 rounded-lg border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-medium text-sm leading-tight">{req.title}</h3>
-                      <Badge variant="default" className="shrink-0 text-[10px] bg-emerald-500">
-                        {req.matchScore}% Match
-                      </Badge>
+              {isClient ? (
+                /* Client: Show featured products */
+                featuredProducts.map((product) => (
+                  <Link key={product.id} href={`/marketplace/${product.id}`}>
+                    <div className="p-3 rounded-lg border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-medium text-sm leading-tight">{product.name}</h3>
+                        <span className="text-sm font-bold text-[var(--primary)] shrink-0">
+                          {product.isFree ? "Free" : formatCurrency(product.price)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--muted-foreground)] line-clamp-1 mb-2">
+                        {product.description}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {product.technologies.slice(0, 3).map((tech) => (
+                          <Badge key={tech} variant="secondary" className="text-[10px]">{tech}</Badge>
+                        ))}
+                        <div className="flex items-center gap-1 ml-auto">
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          <span className="text-xs font-medium">{product.rating}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mb-2 text-xs text-[var(--muted-foreground)]">
-                      <span className="font-medium text-[var(--foreground)]">
-                        {req.budgetMin && req.budgetMax
-                          ? `${formatCurrency(req.budgetMin)} – ${formatCurrency(req.budgetMax)}`
-                          : "Open"}
-                      </span>
-                      <span>•</span>
-                      <span>{req.proposalCount} proposals</span>
+                  </Link>
+                ))
+              ) : (
+                /* Student: Show matched solution requests */
+                matchedRequests.map((req) => (
+                  <Link key={req.id} href={`/solutions/${req.id}`}>
+                    <div className="p-3 rounded-lg border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-medium text-sm leading-tight">{req.title}</h3>
+                        <Badge variant="default" className="shrink-0 text-[10px] bg-emerald-500">
+                          {req.matchScore}% Match
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2 text-xs text-[var(--muted-foreground)]">
+                        <span className="font-medium text-[var(--foreground)]">
+                          {req.budgetMin && req.budgetMax
+                            ? `${formatCurrency(req.budgetMin)} – ${formatCurrency(req.budgetMax)}`
+                            : "Open"}
+                        </span>
+                        <span>•</span>
+                        <span>{req.proposalCount} proposals</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {req.matchingSkills.map((skill) => (
+                          <Badge key={skill} variant="secondary" className="text-[10px]">✓ {skill}</Badge>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {req.matchingSkills.map((skill) => (
-                        <Badge key={skill} variant="secondary" className="text-[10px]">✓ {skill}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))
+              )}
             </CardContent>
           </Card>
         </motion.div>

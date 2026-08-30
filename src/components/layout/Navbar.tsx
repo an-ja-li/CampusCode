@@ -172,18 +172,30 @@ export function Navbar() {
                           <div className="p-3 border-b border-[var(--border)]">
                             <p className="font-semibold text-sm">{displayName}</p>
                             <p className="text-xs text-[var(--muted-foreground)]">
-                              {user.studentProfile?.college || "Student Developer"}
+                              {user.role?.toLowerCase() === "client"
+                                ? (user.clientProfile?.organization || "Client")
+                                : (user.studentProfile?.college || "Student Developer")}
                             </p>
                           </div>
                           <div className="p-1">
-                            {[
-                              { label: "Dashboard", href: "/dashboard" },
-                              { label: "My Projects", href: "/projects" },
-                              { label: "Marketplace", href: "/marketplace" },
-                              { label: "Solutions", href: "/solutions" },
-                              { label: "Earnings", href: "/earnings" },
-                              { label: "Settings", href: "/settings" },
-                            ].map((item) => (
+                            {(user.role?.toLowerCase() === "client"
+                              ? [
+                                  { label: "Dashboard", href: "/dashboard" },
+                                  { label: "Browse Software", href: "/marketplace" },
+                                  { label: "My Requirements", href: "/solutions" },
+                                  { label: "Post Requirement", href: "/solutions/post" },
+                                  { label: "Contracts", href: "/contracts" },
+                                  { label: "Settings", href: "/settings" },
+                                ]
+                              : [
+                                  { label: "Dashboard", href: "/dashboard" },
+                                  { label: "My Projects", href: "/projects" },
+                                  { label: "Marketplace", href: "/marketplace" },
+                                  { label: "Solutions", href: "/solutions" },
+                                  { label: "Earnings", href: "/earnings" },
+                                  { label: "Settings", href: "/settings" },
+                                ]
+                            ).map((item) => (
                               <Link
                                 key={item.href}
                                 href={item.href}

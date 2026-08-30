@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
-import type { StudentProfile } from "@/types";
+import type { StudentProfile, ClientProfile } from "@/types";
 
 interface UserProfile {
   id: string;
@@ -21,6 +21,7 @@ interface UserProfile {
   createdAt: string;
   updatedAt: string;
   studentProfile: StudentProfile | null;
+  clientProfile: ClientProfile | null;
 }
 
 interface AuthState {
@@ -83,6 +84,21 @@ export function useAuth() {
                     linkedin: data.studentProfile.linkedin,
                   }
                 : null,
+              clientProfile: data.clientProfile
+                ? {
+                    id: data.clientProfile.id,
+                    userId: data.clientProfile.userId,
+                    organization: data.clientProfile.organization || "",
+                    website: data.clientProfile.website,
+                    description: data.clientProfile.description || "",
+                    profileType: data.clientProfile.profileType || "organization",
+                    isVerified: data.clientProfile.isVerified ?? true,
+                    rating: data.clientProfile.rating || 0,
+                    reviewCount: data.clientProfile.reviewCount || 0,
+                    totalSpent: data.clientProfile.totalSpent || 0,
+                    projectsPosted: data.clientProfile.projectsPosted || 0,
+                  }
+                : null,
             });
           }
         })
@@ -108,11 +124,12 @@ export function useAuth() {
         name: session.user.name || "",
         email: session.user.email || "",
         avatar: session.user.image || null,
-        role: (session.user as { role?: string }).role || "student",
+        role: ((session.user as { role?: string }).role || "student").toLowerCase(),
         isVerified: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         studentProfile: null,
+        clientProfile: null,
       }
     : null;
 

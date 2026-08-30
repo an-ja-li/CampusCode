@@ -34,8 +34,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  const role = pathname?.startsWith("/admin") ? "admin" : (user?.role || "student");
-  const sidebarItems = role === "admin" ? ADMIN_SIDEBAR_ITEMS : STUDENT_SIDEBAR_ITEMS;
+  const role = pathname?.startsWith("/admin")
+    ? "admin"
+    : ((user?.role || "student").toLowerCase());
+  const isClient = role === "client";
+  const isStudent = role === "student";
+  const sidebarItems = role === "admin"
+    ? ADMIN_SIDEBAR_ITEMS
+    : isClient
+    ? CLIENT_SIDEBAR_ITEMS
+    : STUDENT_SIDEBAR_ITEMS;
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
@@ -88,7 +96,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user.name}</p>
                 <p className="text-xs text-[var(--muted-foreground)] truncate">
-                  {user.studentProfile?.college || "Developer"}
+                  {isClient
+                    ? (user.clientProfile?.organization || "Client")
+                    : (user.studentProfile?.college || "Student Developer")}
                 </p>
               </div>
               <Link href="/settings" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1">
@@ -184,7 +194,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Avatar name={user.name} size="sm" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{user.name}</p>
-                      <p className="text-xs text-[var(--muted-foreground)] truncate">{user.studentProfile?.college || "Developer"}</p>
+                      <p className="text-xs text-[var(--muted-foreground)] truncate">
+                        {isClient
+                          ? (user.clientProfile?.organization || "Client")
+                          : (user.studentProfile?.college || "Student Developer")}
+                      </p>
                     </div>
                   </div>
                   <button
