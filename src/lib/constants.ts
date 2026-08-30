@@ -82,7 +82,6 @@ export const CLIENT_SIDEBAR_ITEMS = [
   { label: 'Overview', href: '/dashboard', icon: 'LayoutDashboard' },
   { label: 'Browse Software', href: '/marketplace', icon: 'Store' },
   { label: 'My Requirements', href: '/solutions', icon: 'Lightbulb' },
-  { label: 'Post Requirement', href: '/solutions/post', icon: 'PlusCircle' },
   { label: 'Active Contracts', href: '/contracts', icon: 'FileCheck' },
   { label: 'Messages', href: '/messages', icon: 'MessageSquare' },
   { label: 'Purchases', href: '/purchases', icon: 'ShoppingBag' },

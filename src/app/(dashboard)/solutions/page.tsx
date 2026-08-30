@@ -9,9 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import type { SolutionRequest } from "@/types";
 
 export default function SolutionsPage() {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const isClient = isAuthenticated && user?.role?.toLowerCase() === "client";
+
   const [requests, setRequests] = useState<SolutionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -28,11 +32,18 @@ export default function SolutionsPage() {
         if (search) queryParams.set("search", search);
         queryParams.set("sort", sortBy);
 
+        if (isClient && user?.id) {
+          queryParams.set("clientId", user.id);
+        }
+
         const res = await fetch(`/api/solutions?${queryParams.toString()}`);
         if (res.ok) {
           const data = await res.json();
           if (!cancelled && data.requests) {
-            setRequests(data.requests);
+            const filtered = isClient && user?.id
+              ? data.requests.filter((r: SolutionRequest) => r.clientId === user.id || r.client?.id === user.id)
+              : data.requests;
+            setRequests(filtered);
           }
         }
       } catch (err) {
@@ -42,12 +53,14 @@ export default function SolutionsPage() {
       }
     }
 
-    loadRequirements();
+    if (!authLoading) {
+      loadRequirements();
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [search, category, sortBy]);
+  }, [search, category, sortBy, isClient, user?.id, authLoading]);
 
   const categories = ["all", "web", "ai-ml", "mobile", "automation", "data-science"];
 
@@ -57,9 +70,13 @@ export default function SolutionsPage() {
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Find a Solution</h1>
+            <h1 className="text-2xl font-bold mb-1">
+              {isClient ? "My Requirements" : "Find a Solution"}
+            </h1>
             <p className="text-[var(--muted-foreground)]">
-              Browse requirements and submit proposals to build software solutions
+              {isClient
+                ? "Manage your posted requirements and review incoming proposals"
+                : "Browse requirements and submit proposals to build software solutions"}
             </p>
           </div>
           <Link href="/solutions/post">
@@ -104,7 +121,7 @@ export default function SolutionsPage() {
 
       {/* Results Count */}
       {!loading && (
-        <p className="text-sm text-[var(--muted-foreground)] mb-4">{requests.length} requirements found</p>
+        <p className="text-sm text-[var(--muted-foreground)] mb-4">{requests.length} {requests.length === 1 ? "requirement" : "requirements"} found</p>
       )}
 
       {/* List */}
@@ -142,7 +159,7 @@ export default function SolutionsPage() {
                           </span>
                           <span className="flex items-center gap-1"><Users className="h-3 w-3" />{req.proposalCount} proposals</span>
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Posted {formatRelativeTime(req.createdAt)}</span>
-                          {req.client && <span>by {req.client.clientProfile?.organization || req.client.name}</span>}
+                          {!isClient && req.client && <span>by {req.client.clientProfile?.organization || req.client.name}</span>}
                         </div>
                       </div>
                       <ArrowRight className="h-5 w-5 text-[var(--muted-foreground)] shrink-0 mt-1" />
@@ -158,8 +175,21 @@ export default function SolutionsPage() {
       {!loading && requests.length === 0 && (
         <div className="text-center py-16">
           <Lightbulb className="h-12 w-12 mx-auto text-[var(--muted-foreground)]/30 mb-4" />
-          <h3 className="font-semibold mb-1">No requirements found</h3>
-          <p className="text-sm text-[var(--muted-foreground)]">Try adjusting your search</p>
+          <h3 className="font-semibold mb-1">
+            {isClient ? "No requirements posted yet" : "No requirements found"}
+          </h3>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            {isClient
+              ? "You haven't posted any requirements yet. Post your software requirement to receive proposals from talented developers."
+              : "Try adjusting your search or filters"}
+          </p>
+          {isClient && (
+            <Link href="/solutions/post" className="inline-block mt-4">
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" /> Post a Requirement
+              </Button>
+            </Link>
+          )}
         </div>
       )}
     </div>

@@ -2,10 +2,11 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Star, ExternalLink, ShoppingCart, CheckCircle2, Code2,
-  ArrowLeft, Globe, FileText, GitBranch, Download, Shield, Loader2,
+  ArrowLeft, Globe, FileText, GitBranch, Download, Shield, Loader2, MessageSquare,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,9 +18,11 @@ import type { Product, User } from "@/types";
 
 export default function ProductDetailPage({ params }: { params: Promise<{ product: string }> }) {
   const { product: productId } = use(params);
+  const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedScreenshotIndex, setSelectedScreenshotIndex] = useState(0);
+  const [contactingLoading, setContactingLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -296,6 +299,37 @@ export default function ProductDetailPage({ params }: { params: Promise<{ produc
                   View Profile
                 </Button>
               </Link>
+              <Button
+                variant="outline"
+                className="w-full mt-2 gap-1.5"
+                size="sm"
+                disabled={contactingLoading}
+                onClick={async () => {
+                  if (!seller.id) return;
+                  setContactingLoading(true);
+                  try {
+                    const res = await fetch("/api/messages/conversations", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        participantId: seller.id,
+                        context: { type: "product", id: product.id },
+                      }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      router.push(`/messages?conv=${data.conversation.id}`);
+                    }
+                  } catch (err) {
+                    console.error("Failed to contact seller:", err);
+                  } finally {
+                    setContactingLoading(false);
+                  }
+                }}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Contact Seller
+              </Button>
             </CardContent>
           </Card>
 

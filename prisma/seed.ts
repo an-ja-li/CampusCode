@@ -7,7 +7,7 @@
 // directly into Neon PostgreSQL with relational consistency.
 // ============================================================
 
-import { PrismaClient, UserRole, StudentLevel, ProjectStatus, TaskStatus, TaskPriority, ProductStatus, SolutionRequestStatus, ProposalStatus, ContractStatus, MilestoneStatus } from "@prisma/client";
+import { PrismaClient, UserRole, StudentLevel, ProjectStatus, TaskStatus, TaskPriority, ProductStatus, SolutionRequestStatus, ProposalStatus, ContractStatus, MilestoneStatus, MessageType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -959,6 +959,148 @@ async function main() {
     });
   }
   console.log("✅ Seeded all 12 solution requests into PostgreSQL.");
+
+  // 7. Proposals & Active Contract
+  const proposal1 = await prisma.proposal.create({
+    data: {
+      id: "prop1",
+      solutionRequestId: "sr8",
+      studentId: "u3",
+      price: 35000,
+      estimatedDelivery: 60,
+      content: "I specialize in high-concurrency systems and location-based microservices. For this Attendance & Geo-fencing System, I propose using React Native with Mapbox for real-time polygon radius verification and Node.js with PostgreSQL/PostGIS for sub-second spatial querying.",
+      technologies: ["React Native", "Node.js", "PostgreSQL", "Mapbox", "Redis"],
+      status: ProposalStatus.ACCEPTED,
+      milestones: {
+        create: [
+          { title: "Project Setup & UI Design", description: "Architecture, project setup, and UI wireframes", amount: 7000, durationDays: 14 },
+          { title: "Backend & Database", description: "API development and spatial database setup", amount: 10000, durationDays: 18 },
+          { title: "Geo-fencing & Mobile App", description: "Location tracking and mobile app client", amount: 10000, durationDays: 18 },
+          { title: "Testing & Deployment", description: "QA testing, timesheet export and production deployment", amount: 8000, durationDays: 10 },
+        ],
+      },
+    },
+  });
+
+  const contract1 = await prisma.contract.create({
+    data: {
+      id: "cont1",
+      solutionRequestId: "sr8",
+      proposalId: proposal1.id,
+      studentId: "u3",
+      clientId: "c1",
+      totalAmount: 35000,
+      platformFee: 3500,
+      studentEarnings: 31500,
+      status: ContractStatus.ACTIVE,
+      startDate: new Date("2026-07-25"),
+      endDate: new Date("2026-10-30"),
+      milestones: {
+        create: [
+          {
+            title: "Project Setup & UI Design",
+            description: "Architecture, project setup, and UI design",
+            amount: 7000,
+            status: MilestoneStatus.APPROVED,
+            dueDate: new Date("2026-08-10"),
+            completedAt: new Date("2026-08-09"),
+          },
+          {
+            title: "Backend & Database",
+            description: "API development and database setup",
+            amount: 10000,
+            status: MilestoneStatus.IN_PROGRESS,
+            dueDate: new Date("2026-08-30"),
+          },
+          {
+            title: "Geo-fencing & Mobile App",
+            description: "Location tracking and mobile app",
+            amount: 10000,
+            status: MilestoneStatus.PENDING,
+            dueDate: new Date("2026-09-20"),
+          },
+          {
+            title: "Testing & Deployment",
+            description: "QA testing and production deployment",
+            amount: 8000,
+            status: MilestoneStatus.PENDING,
+            dueDate: new Date("2026-10-15"),
+          },
+        ],
+      },
+    },
+  });
+  console.log("✅ Seeded accepted proposal and active contract with 4 milestones.");
+
+  // 8. Conversations & Messages
+  const conv1 = await prisma.conversation.create({
+    data: {
+      id: "conv1",
+      participants: {
+        create: [
+          { userId: "u3" }, // Rahul Mehta (Student)
+          { userId: "c1" }, // TechStart Innovations (Client)
+        ],
+      },
+    },
+  });
+
+  const conv1Messages = [
+    { senderId: "c1", content: "Hi Rahul, excited to start the Attendance & Geo-fencing project with you!", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12) },
+    { senderId: "u3", content: "Thank you Vikram! I've kicked off the architecture design and wireframes. Will share the initial Figma deck soon.", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 11) },
+    { senderId: "c1", content: 'Milestone 1 "Project Setup & UI Design" deliverable submitted.', type: MessageType.SYSTEM, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 8) },
+    { senderId: "c1", content: "The wireframes look great! Can we make sure CSV timesheet export is also supported for HR payroll?", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4) },
+    { senderId: "u3", content: "Absolutely! I've factored CSV and PDF export into the Milestone 2 backend schema. Developing the spatial geo-check APIs now.", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2) },
+    { senderId: "u3", content: "Completed the PostgreSQL PostGIS boundary indexing. Running the first round of radius latency tests today.", type: MessageType.TEXT, isRead: false, createdAt: new Date(Date.now() - 1000 * 60 * 45) },
+  ];
+
+  for (const m of conv1Messages) {
+    await prisma.message.create({
+      data: {
+        conversationId: conv1.id,
+        senderId: m.senderId,
+        content: m.content,
+        type: m.type,
+        isRead: m.isRead,
+        createdAt: m.createdAt,
+      },
+    });
+  }
+
+  // Conversation 2: Client c1 with Student u1 (Aarav Sharma)
+  const conv2 = await prisma.conversation.create({
+    data: {
+      id: "conv2",
+      participants: {
+        create: [
+          { userId: "u1" }, // Aarav Sharma
+          { userId: "c1" }, // TechStart
+        ],
+      },
+    },
+  });
+
+  const conv2Messages = [
+    { senderId: "u1", content: "Hello TechStart team! I saw your requirement for automated HR workflows. Wanted to share how my NLP analyzer handles resume scoring.", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5) },
+    { senderId: "c1", content: "Thanks Aarav! Your product looks impressive. How quickly could we integrate the API with our internal portal?", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3) },
+    { senderId: "u1", content: "It's a straightforward REST API with API keys. Takes less than 2 hours using our Python SDK or direct HTTP endpoints.", type: MessageType.TEXT, isRead: true, createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1) },
+    { senderId: "c1", content: "Sounds great, reviewing this with our tech lead today.", type: MessageType.TEXT, isRead: false, createdAt: new Date(Date.now() - 1000 * 60 * 120) },
+  ];
+
+  for (const m of conv2Messages) {
+    await prisma.message.create({
+      data: {
+        conversationId: conv2.id,
+        senderId: m.senderId,
+        content: m.content,
+        type: m.type,
+        isRead: m.isRead,
+        createdAt: m.createdAt,
+      },
+    });
+  }
+
+  console.log("✅ Seeded conversations and messages between clients and students.");
   console.log("🚀 Neon PostgreSQL database seed successfully completed!");
 }
 

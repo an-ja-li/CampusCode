@@ -183,7 +183,6 @@ export function Navbar() {
                                   { label: "Dashboard", href: "/dashboard" },
                                   { label: "Browse Software", href: "/marketplace" },
                                   { label: "My Requirements", href: "/solutions" },
-                                  { label: "Post Requirement", href: "/solutions/post" },
                                   { label: "Contracts", href: "/contracts" },
                                   { label: "Settings", href: "/settings" },
                                 ]

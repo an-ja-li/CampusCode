@@ -2,11 +2,12 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Clock, Users, CheckCircle2, Send, Calendar, DollarSign,
   AlertCircle, FileText, Briefcase, Loader2, Sparkles, Plus, Trash2,
-  ShieldCheck, Check,
+  ShieldCheck, Check, MessageSquare, PlusCircle, Layers, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,9 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Input, Textarea, Label } from "@/components/ui/input";
 import { solutionRequests as fallbackRequests } from "@/lib/mock-data";
-import { formatCurrency, formatRelativeTime, formatDate } from "@/lib/utils";
+import { formatCurrency, formatRelativeTime, formatDate, getStatusColor } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import type { SolutionRequest } from "@/types";
+import type { SolutionRequest, Proposal } from "@/types";
 
 interface MilestoneInput {
   id: string;
@@ -27,13 +28,17 @@ interface MilestoneInput {
 
 export default function SolutionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { isAuthenticated, user } = useAuth();
 
   const [request, setRequest] = useState<SolutionRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmittingMode, setIsSubmittingMode] = useState(false);
+  const [expandedProposal, setExpandedProposal] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [messagingId, setMessagingId] = useState<string | null>(null);
 
-  // Proposal Form State
+  // Proposal Form State (for Students)
   const [price, setPrice] = useState<number>(0);
   const [days, setDays] = useState<number>(14);
   const [coverLetter, setCoverLetter] = useState("");
@@ -42,6 +47,9 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const isClient = user?.role?.toLowerCase() === "client";
+  const isOwner = Boolean(user?.id && request?.clientId === user.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,10 +188,59 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
     }
   };
 
+  // Client Action: Accept Proposal
+  const handleAcceptProposal = async (proposalId: string) => {
+    setAcceptingId(proposalId);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/contracts/${data.contractId}`);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to accept proposal");
+      }
+    } catch (err) {
+      console.error("Accept proposal error:", err);
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  // Message Developer
+  const handleMessageStudent = async (studentId: string, proposalId: string) => {
+    setMessagingId(proposalId);
+    try {
+      const res = await fetch("/api/messages/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId: studentId,
+          context: { type: "proposal", id: proposalId },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        router.push(`/messages?conv=${data.conversation.id}`);
+      }
+    } catch (err) {
+      console.error("Failed to start chat:", err);
+    } finally {
+      setMessagingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)] mx-auto" />
+          <p className="text-sm text-[var(--muted-foreground)]">Loading requirement details...</p>
+        </div>
       </div>
     );
   }
@@ -191,6 +248,7 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
   if (!request) {
     return (
       <div className="p-8 text-center max-w-md mx-auto">
+        <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-3" />
         <h1 className="text-xl font-bold mb-2">Requirement Not Found</h1>
         <p className="text-sm text-[var(--muted-foreground)] mb-6">
           This solution request does not exist or has been removed.
@@ -204,11 +262,16 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
     );
   }
 
+  const incomingProposals = (request.proposals as Proposal[]) || [];
+  const mySubmittedProposal = user?.id
+    ? incomingProposals.find((p) => p.studentId === user.id || p.student?.id === user.id)
+    : null;
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
       <AnimatePresence mode="wait">
         {/* ============================================================ */}
-        {/* MODE 1: REQUIREMENT OVERVIEW VIEW                            */}
+        {/* MODE 1: REQUIREMENT OVERVIEW & PROPOSALS                     */}
         {/* ============================================================ */}
         {!isSubmittingMode ? (
           <motion.div
@@ -223,7 +286,8 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
               href="/solutions"
               className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] mb-6 transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" /> Back to Solutions
+              <ArrowLeft className="h-4 w-4" />
+              {isOwner || isClient ? "Back to My Requirements" : "Back to Solution Requests"}
             </Link>
 
             <div className="grid lg:grid-cols-3 gap-8 items-start">
@@ -237,6 +301,11 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
                     </Badge>
                     <Badge variant="outline">{request.difficulty}</Badge>
                     <Badge variant="outline">{request.solutionType?.replace("_", " / ").toUpperCase()}</Badge>
+                    {(isOwner || isClient) && (
+                      <Badge className="bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20">
+                        Owner View
+                      </Badge>
+                    )}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-bold mb-3">{request.title}</h1>
                   <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)] flex-wrap">
@@ -244,7 +313,7 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
                       <Clock className="h-4 w-4" /> Posted {formatRelativeTime(request.createdAt)}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Users className="h-4 w-4" /> {request.proposalCount} proposals
+                      <Users className="h-4 w-4" /> {incomingProposals.length || request.proposalCount || 0} proposals
                     </span>
                     {request.deadline && (
                       <span className="flex items-center gap-1">
@@ -321,9 +390,304 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
                     </CardContent>
                   </Card>
                 )}
+
+                {/* ═══ Your Submitted Proposal Section (for Student who already submitted) ═══ */}
+                {!isOwner && !isClient && mySubmittedProposal && (
+                  <div className="space-y-4 pt-4 border-t border-[var(--border)]">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                          Your Submitted Proposal
+                        </h2>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          You have already submitted a proposal for this requirement. Track review status below.
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          mySubmittedProposal.status?.toUpperCase() === "ACCEPTED"
+                            ? "success"
+                            : mySubmittedProposal.status?.toUpperCase() === "REJECTED"
+                            ? "destructive"
+                            : "secondary"
+                        }
+                        className="uppercase font-semibold tracking-wider text-xs"
+                      >
+                        {mySubmittedProposal.status}
+                      </Badge>
+                    </div>
+
+                    <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-sm">
+                      <CardContent className="p-6 space-y-5">
+                        {/* Price & Delivery Meta */}
+                        <div className="flex items-start justify-between gap-4 flex-wrap pb-4 border-b border-[var(--border)]">
+                          <div>
+                            <p className="text-xs uppercase tracking-wider text-[var(--muted-foreground)]">Your Bid Amount</p>
+                            <p className="text-2xl font-bold text-[var(--primary)]">
+                              {formatCurrency(mySubmittedProposal.price)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs uppercase tracking-wider text-[var(--muted-foreground)]">Estimated Delivery</p>
+                            <p className="text-sm font-semibold text-[var(--foreground)]">
+                              {mySubmittedProposal.estimatedDelivery} days ({mySubmittedProposal.milestones?.length || 0} milestones)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Cover Letter / Pitch */}
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                            Your Proposed Approach
+                          </p>
+                          <p className="text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-line bg-[var(--card)] p-4 rounded-xl border border-[var(--border)]">
+                            {mySubmittedProposal.content}
+                          </p>
+                        </div>
+
+                        {/* Tech Stack */}
+                        {mySubmittedProposal.technologies && mySubmittedProposal.technologies.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                              Proposed Technologies
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {mySubmittedProposal.technologies.map((tech) => (
+                                <Badge key={tech} variant="secondary" className="text-xs">
+                                  {tech}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Milestones */}
+                        {mySubmittedProposal.milestones && mySubmittedProposal.milestones.length > 0 && (
+                          <div className="space-y-2 pt-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                              Milestone Schedule ({mySubmittedProposal.milestones.length})
+                            </p>
+                            <div className="grid gap-2">
+                              {mySubmittedProposal.milestones.map((ms, i) => (
+                                <div
+                                  key={ms.id || i}
+                                  className="p-3 rounded-lg bg-[var(--card)] border border-[var(--border)] flex items-center justify-between text-xs gap-3"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] font-bold flex items-center justify-center text-[10px] shrink-0">
+                                      {i + 1}
+                                    </span>
+                                    <span className="font-medium truncate">{ms.title}</span>
+                                    {Boolean(ms.estimatedDays || (ms as unknown as { durationDays?: number }).durationDays) && (
+                                      <span className="text-[var(--muted-foreground)] shrink-0">
+                                        • {ms.estimatedDays || (ms as unknown as { durationDays?: number }).durationDays} days
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="font-bold text-[var(--primary)] shrink-0">
+                                    {formatCurrency(ms.amount)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border)] flex-wrap">
+                          <Link href="/proposals">
+                            <Button variant="outline" size="sm" className="gap-1.5">
+                              <FileText className="h-4 w-4" />
+                              View in My Proposals
+                            </Button>
+                          </Link>
+                          {request.clientId && (
+                            <Button
+                              size="sm"
+                              className="gap-1.5 shadow-md cursor-pointer"
+                              disabled={messagingId === mySubmittedProposal.id}
+                              onClick={() => handleMessageStudent(request.clientId, mySubmittedProposal.id)}
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                              Message Client
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {/* ═══ Incoming Proposals Section (for Client/Owner) ═══ */}
+                {(isOwner || isClient) && (
+                  <div className="space-y-4 pt-4 border-t border-[var(--border)]">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-bold">
+                          Incoming Proposals ({incomingProposals.length})
+                        </h2>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          Review student developer bids, milestone schedules, chat, and accept contracts.
+                        </p>
+                      </div>
+                    </div>
+
+                    {incomingProposals.length > 0 ? (
+                      <div className="space-y-4">
+                        {incomingProposals.map((proposal) => {
+                          const isExpanded = expandedProposal === proposal.id;
+                          const student = proposal.student;
+                          const isAccepted = proposal.status?.toLowerCase() === "accepted";
+
+                          return (
+                            <Card key={proposal.id} className="border-[var(--border)] hover:border-[var(--primary)]/30 transition-all">
+                              <CardContent className="p-5 space-y-4">
+                                {/* Top Row: Student & Bid Summary */}
+                                <div className="flex items-start justify-between gap-4 flex-wrap">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar name={student?.name || "Developer"} size="md" />
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-semibold text-sm">{student?.name || "Student Developer"}</p>
+                                        {student?.studentProfile?.level && (
+                                          <Badge variant="outline" className="text-[10px] capitalize">
+                                            {student.studentProfile.level}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-[var(--muted-foreground)]">
+                                        {student?.studentProfile?.college || "Verified Student Developer"}
+                                        {student?.studentProfile?.rating ? ` • ⭐ ${student.studentProfile.rating}` : ""}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <p className="text-xl font-bold text-[var(--primary)]">
+                                      {formatCurrency(proposal.price)}
+                                    </p>
+                                    <p className="text-xs text-[var(--muted-foreground)]">
+                                      {proposal.estimatedDelivery} days delivery • {proposal.milestones?.length || 0} milestones
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Proposal Pitch / Cover Letter */}
+                                <p className="text-sm text-[var(--muted-foreground)] leading-relaxed whitespace-pre-line">
+                                  {proposal.content}
+                                </p>
+
+                                {/* Tech Tags */}
+                                {proposal.technologies && proposal.technologies.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {proposal.technologies.map((t) => (
+                                      <Badge key={t} variant="secondary" className="text-xs">
+                                        {t}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Expandable Milestones Breakdown */}
+                                {proposal.milestones && proposal.milestones.length > 0 && (
+                                  <div className="pt-2 border-t border-[var(--border)]">
+                                    <button
+                                      onClick={() => setExpandedProposal(isExpanded ? null : proposal.id)}
+                                      className="flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline cursor-pointer"
+                                    >
+                                      <Layers className="h-3.5 w-3.5" />
+                                      {isExpanded ? "Hide Milestone Schedule" : `View ${proposal.milestones.length} Milestones Breakdown`}
+                                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                    </button>
+
+                                    {isExpanded && (
+                                      <div className="mt-3 space-y-2 pl-2 border-l-2 border-[var(--primary)]/30">
+                                        {proposal.milestones.map((m, idx) => (
+                                          <div key={m.id || idx} className="flex items-center justify-between text-xs py-1">
+                                            <div>
+                                              <span className="font-medium text-[var(--foreground)]">{idx + 1}. {m.title}</span>
+                                              {m.description && (
+                                                <p className="text-[11px] text-[var(--muted-foreground)]">{m.description}</p>
+                                              )}
+                                            </div>
+                                            <span className="font-semibold text-[var(--primary)] shrink-0 ml-4">
+                                              {formatCurrency(m.amount)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)] flex-wrap gap-2">
+                                  <Badge className={getStatusColor(proposal.status)}>
+                                    {proposal.status}
+                                  </Badge>
+
+                                  <div className="flex items-center gap-2">
+                                    {student?.id && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-1.5 cursor-pointer"
+                                        disabled={messagingId === proposal.id}
+                                        onClick={() => handleMessageStudent(student.id, proposal.id)}
+                                      >
+                                        <MessageSquare className="h-3.5 w-3.5" />
+                                        Message Developer
+                                      </Button>
+                                    )}
+
+                                    {isAccepted ? (
+                                      <Link href="/contracts">
+                                        <Button size="sm" className="gap-1.5">
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                          View Active Contract
+                                        </Button>
+                                      </Link>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        className="gap-1.5 cursor-pointer"
+                                        disabled={acceptingId === proposal.id}
+                                        onClick={() => handleAcceptProposal(proposal.id)}
+                                      >
+                                        {acceptingId === proposal.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                        )}
+                                        Accept & Start Contract
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <Card className="border-dashed bg-[var(--card)]/50">
+                        <CardContent className="p-8 text-center space-y-3">
+                          <div className="w-12 h-12 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center mx-auto">
+                            <Briefcase className="h-6 w-6" />
+                          </div>
+                          <h3 className="font-semibold text-base">No proposals submitted yet</h3>
+                          <p className="text-xs text-[var(--muted-foreground)] max-w-sm mx-auto">
+                            Student developers are reviewing your requirement. As soon as bids arrive, they will appear here with detailed deliverables and milestones.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Sidebar Action Column */}
+              {/* Sidebar Column */}
               <div className="space-y-4 lg:sticky lg:top-6 self-start">
                 <Card>
                   <CardContent className="p-6 space-y-5">
@@ -352,7 +716,7 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
                       )}
                       <div className="flex justify-between">
                         <span className="text-[var(--muted-foreground)]">Proposals</span>
-                        <span className="font-medium">{request.proposalCount} submitted</span>
+                        <span className="font-medium">{incomingProposals.length || request.proposalCount || 0} submitted</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-[var(--muted-foreground)]">Experience Level</span>
@@ -360,20 +724,64 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
                       </div>
                     </div>
 
-                    {/* Smooth Transition Trigger */}
-                    <Button
-                      className="w-full gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
-                      size="lg"
-                      onClick={() => setIsSubmittingMode(true)}
-                    >
-                      <Send className="h-4 w-4" />
-                      Submit Proposal
-                    </Button>
+                    {/* Button logic based on Role */}
+                    {isOwner || isClient ? (
+                      <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          You are viewing your posted requirement. Review developer proposals on the left.
+                        </p>
+                        <Link href="/contracts">
+                          <Button variant="outline" className="w-full gap-2 cursor-pointer mb-2" size="sm">
+                            <CheckCircle2 className="h-4 w-4" />
+                            View Active Contracts
+                          </Button>
+                        </Link>
+                        <Link href="/solutions/post">
+                          <Button className="w-full gap-2 cursor-pointer" size="sm">
+                            <PlusCircle className="h-4 w-4" />
+                            Post Another Requirement
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : mySubmittedProposal ? (
+                      <div className="space-y-2.5 pt-2 border-t border-[var(--border)]">
+                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-semibold flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          <span>Proposal Submitted ({formatCurrency(mySubmittedProposal.price)})</span>
+                        </div>
+                        <Link href="/proposals">
+                          <Button variant="outline" className="w-full gap-2 cursor-pointer" size="sm">
+                            <FileText className="h-4 w-4" />
+                            Track in My Proposals
+                          </Button>
+                        </Link>
+                        {request.clientId && (
+                          <Button
+                            className="w-full gap-2 cursor-pointer shadow-md"
+                            size="sm"
+                            disabled={messagingId === mySubmittedProposal.id}
+                            onClick={() => handleMessageStudent(request.clientId, mySubmittedProposal.id)}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Message Client
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+                        size="lg"
+                        onClick={() => setIsSubmittingMode(true)}
+                      >
+                        <Send className="h-4 w-4" />
+                        Submit Proposal
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
 
-                {/* Client Profile Card */}
-                {request.client && (
+                {/* Client Profile Card (Shown to students/other users, hidden for owner) */}
+                {!isOwner && request.client && (
                   <Card>
                     <CardContent className="p-5">
                       <p className="text-xs uppercase tracking-wider text-[var(--muted-foreground)] mb-3">
@@ -419,7 +827,7 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
           </motion.div>
         ) : (
           /* ============================================================ */
-          /* MODE 2: DEDICATED PROPOSAL SUBMISSION PAGE                   */
+          /* MODE 2: DEDICATED PROPOSAL SUBMISSION PAGE (FOR STUDENTS)     */
           /* ============================================================ */
           <motion.div
             key="submit-form"
@@ -448,332 +856,242 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-16 max-w-lg mx-auto space-y-6"
+                className="max-w-xl mx-auto text-center py-12 px-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xl space-y-5"
               >
-                <div className="h-16 w-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto ring-8 ring-emerald-500/5">
+                <div className="h-16 w-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto">
                   <Check className="h-8 w-8" />
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">Proposal Submitted!</h2>
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    Your proposal of <strong className="text-[var(--foreground)]">{formatCurrency(price)}</strong> has been sent to{" "}
-                    <strong>{request.client?.clientProfile?.organization || request.client?.name || "the client"}</strong>.
-                  </p>
-                </div>
-
+                <h2 className="text-2xl font-bold">Proposal Submitted!</h2>
+                <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
+                  Your bid of <span className="font-semibold text-[var(--foreground)]">{formatCurrency(price)}</span> has been delivered to the client with your proposed milestone schedule.
+                </p>
                 <div className="flex gap-3 justify-center pt-2">
                   <Link href="/proposals">
-                    <Button className="gap-2">
-                      <FileText className="h-4 w-4" /> View My Proposals
-                    </Button>
+                    <Button variant="outline">Track My Proposals</Button>
                   </Link>
-                  <Button variant="outline" onClick={() => setIsSubmittingMode(false)}>
+                  <Button onClick={() => setIsSubmittingMode(false)}>
                     View Requirement
                   </Button>
                 </div>
               </motion.div>
             ) : (
-              /* Interactive Proposal Builder Form */
-              <form onSubmit={handleSubmitProposal} className="grid lg:grid-cols-3 gap-8 items-start">
-                {/* Form Fields Column */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Top Context Header */}
-                  <div>
-                    <span className="text-xs uppercase tracking-wider text-[var(--primary)] font-semibold">
-                      New Proposal Application
-                    </span>
-                    <h1 className="text-2xl font-bold mt-0.5">{request.title}</h1>
+              /* Submission Form */
+              <form onSubmit={handleSubmitProposal} className="max-w-4xl mx-auto space-y-8">
+                {submitError && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-500 text-sm">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <p>{submitError}</p>
                   </div>
+                )}
 
-                  {submitError && (
-                    <div className="flex items-center gap-2 p-3.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      {submitError}
-                    </div>
-                  )}
-
-                  {/* 1. Bid & Timeline Card */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">1. Pricing & Delivery Timeline</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid sm:grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="price" className="mb-1.5 block text-sm font-medium">
-                            Your Proposed Price (₹)
-                          </Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--muted-foreground)] font-semibold">
-                              ₹
-                            </span>
-                            <Input
-                              id="price"
-                              type="number"
-                              required
-                              min="1000"
-                              value={price || ""}
-                              onChange={(e) => handlePriceChange(Number(e.target.value))}
-                              placeholder="25000"
-                              className="pl-8 text-base font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                          </div>
-                          <p className="text-xs text-[var(--muted-foreground)] mt-1.5">
-                            Client budget: {request.budgetMin && request.budgetMax ? `${formatCurrency(request.budgetMin)} – ${formatCurrency(request.budgetMax)}` : "Open"}
-                          </p>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="days" className="mb-1.5 block text-sm font-medium">
-                            Estimated Delivery (Days)
-                          </Label>
-                          <div className="relative">
-                            <Input
-                              id="days"
-                              type="number"
-                              required
-                              min="1"
-                              max="90"
-                              value={days || ""}
-                              onChange={(e) => setDays(Number(e.target.value))}
-                              placeholder="14"
-                              className="text-base pr-14 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted-foreground)] pointer-events-none font-medium">
-                              Days
-                            </span>
-                          </div>
-                          <p className="text-xs text-[var(--muted-foreground)] mt-1.5">
-                            Realistic timeline to deliver tested software
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Fee Transparency Box */}
-                      <div className="p-3 rounded-lg bg-[var(--muted)]/50 border border-[var(--border)] text-xs space-y-1.5">
-                        <div className="flex justify-between text-[var(--muted-foreground)]">
-                          <span>Gross Client Bid:</span>
-                          <span>{formatCurrency(price)}</span>
-                        </div>
-                        <div className="flex justify-between text-[var(--muted-foreground)]">
-                          <span>CampusCode Platform Fee (10%):</span>
-                          <span>- {formatCurrency(platformFee)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-sm text-[var(--foreground)] pt-1 border-t border-[var(--border)]">
-                          <span>Your Take-Home Payout:</span>
-                          <span className="text-emerald-500">{formatCurrency(takeHome)}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* 2. Cover Letter & Technical Approach */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">2. Cover Letter & Solution Strategy</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
+                {/* Section 1: Pitch & Approach */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-[var(--primary)]" />
+                      1. Cover Pitch & Solution Architecture
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium mb-1.5 block">
+                        Describe how you will solve this problem *
+                      </Label>
                       <Textarea
-                        required
                         rows={6}
+                        placeholder="Detail your system architecture, technical approach, and how you will meet the requirements..."
                         value={coverLetter}
                         onChange={(e) => setCoverLetter(e.target.value)}
-                        placeholder="Hi! I have built similar systems using React & PostgreSQL. Here is how I plan to architect your solution and solve your requirements..."
-                        className="text-sm leading-relaxed"
+                        required
                       />
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        Tip: Highlight relevant prior projects, your technical architecture, and how you will meet their deliverables.
-                      </p>
-                    </CardContent>
-                  </Card>
+                    </div>
 
-                  {/* 3. Milestone Breakdown */}
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle className="text-base">3. Project Milestones</CardTitle>
-                        <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                          Split deliverables into clear funding stages
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddMilestone}
-                        className="gap-1 text-xs"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Add Milestone
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {milestones.map((m, idx) => (
-                        <div
-                          key={m.id}
-                          className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-lg bg-[var(--muted)]/40 border border-[var(--border)] text-sm"
-                        >
-                          <span className="font-bold text-xs text-[var(--muted-foreground)] px-1.5 py-0.5 rounded bg-[var(--background)]">
-                            #{idx + 1}
-                          </span>
-                          <div className="flex-1 w-full sm:w-auto">
-                            <Input
-                              value={m.title}
-                              onChange={(e) => handleMilestoneChange(m.id, "title", e.target.value)}
-                              placeholder="Milestone description"
-                              className="text-xs h-8"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <div className="relative w-28">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted-foreground)]">
-                                ₹
-                              </span>
-                              <Input
-                                type="number"
-                                value={m.amount || ""}
-                                onChange={(e) => handleMilestoneChange(m.id, "amount", Number(e.target.value))}
-                                className="text-xs h-8 pl-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                            </div>
-                            <div className="relative w-24">
-                              <Input
-                                type="number"
-                                value={m.durationDays || ""}
-                                onChange={(e) => handleMilestoneChange(m.id, "durationDays", Number(e.target.value))}
-                                className="text-xs h-8 pr-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--muted-foreground)] pointer-events-none font-medium">
-                                days
-                              </span>
-                            </div>
-                            {milestones.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveMilestone(m.id)}
-                                className="text-[var(--muted-foreground)] hover:text-red-500 p-1 cursor-pointer transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Milestone Sum Check */}
-                      <div className="flex justify-between items-center text-xs pt-2">
-                        <span className="text-[var(--muted-foreground)]">
-                          Milestones Total: <strong>{formatCurrency(totalMilestonesAmount)}</strong>
-                        </span>
-                        {totalMilestonesAmount !== price && (
-                          <span className="text-amber-500 font-medium">
-                            ⚠️ Sum ({formatCurrency(totalMilestonesAmount)}) differs from total bid ({formatCurrency(price)})
-                          </span>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* 4. Tech Stack Selection */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">4. Technologies You Will Use</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    {/* Tech Stack Select */}
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">
+                        Technologies you will use for this project
+                      </Label>
                       <div className="flex flex-wrap gap-2">
-                        {(request.preferredTechnologies || ["React", "Node.js", "PostgreSQL"]).map((tech) => {
-                          const isSelected = selectedTechs.includes(tech);
+                        {request.preferredTechnologies?.map((tech) => {
+                          const selected = selectedTechs.includes(tech);
                           return (
                             <button
-                              key={tech}
                               type="button"
+                              key={tech}
                               onClick={() => toggleTech(tech)}
-                              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer border ${
-                                isSelected
-                                  ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                                  : "bg-[var(--muted)] text-[var(--muted-foreground)] border-transparent hover:border-[var(--border)]"
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                                selected
+                                  ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm"
+                                  : "border-[var(--border)] hover:bg-[var(--muted)]"
                               }`}
                             >
-                              {isSelected ? `✓ ${tech}` : `+ ${tech}`}
+                              {selected ? `✓ ${tech}` : `+ ${tech}`}
                             </button>
                           );
                         })}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  {/* Submit Actions */}
-                  <div className="flex items-center justify-end gap-3 pt-4">
+                {/* Section 2: Budget & Timeline */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <DollarSign className="h-5 w-5 text-[var(--primary)]" />
+                      2. Proposed Pricing & Timeline
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium mb-1.5 block">
+                          Total Bid Amount (₹) *
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1000"
+                          step="500"
+                          value={price || ""}
+                          onChange={(e) => handlePriceChange(Number(e.target.value))}
+                          placeholder="e.g. 25000"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium mb-1.5 block">
+                          Estimated Delivery Time (Days) *
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="180"
+                          value={days}
+                          onChange={(e) => setDays(Number(e.target.value))}
+                          placeholder="e.g. 14"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Earnings Breakdown */}
+                    <div className="p-4 rounded-xl bg-[var(--muted)]/40 border border-[var(--border)] flex items-center justify-between text-sm flex-wrap gap-3">
+                      <div>
+                        <p className="text-[var(--muted-foreground)]">Your Take-Home (90%)</p>
+                        <p className="text-lg font-bold text-emerald-500">{formatCurrency(takeHome)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--muted-foreground)]">Platform Fee (10%)</p>
+                        <p className="text-sm font-medium text-[var(--muted-foreground)]">{formatCurrency(platformFee)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--muted-foreground)]">Client Pays</p>
+                        <p className="text-sm font-semibold">{formatCurrency(price)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Section 3: Milestone Schedule */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Briefcase className="h-5 w-5 text-[var(--primary)]" />
+                      3. Milestone Deliverables Schedule
+                    </CardTitle>
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setIsSubmittingMode(false)}
-                      disabled={submitting}
+                      size="sm"
+                      onClick={handleAddMilestone}
+                      className="gap-1 text-xs"
                     >
-                      Cancel
+                      <Plus className="h-3.5 w-3.5" /> Add Milestone
                     </Button>
-                    <Button
-                      type="submit"
-                      size="lg"
-                      className="gap-2 px-8"
-                      disabled={submitting}
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-4 w-4" /> Send Proposal
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Right Context Sidebar */}
-                <div className="space-y-4 lg:sticky lg:top-6 self-start">
-                  <Card className="bg-[var(--muted)]/20">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Requirement Snapshot</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-xs">
-                      <div>
-                        <span className="text-[var(--muted-foreground)]">Client:</span>
-                        <p className="font-semibold text-sm mt-0.5">
-                          {request.client?.clientProfile?.organization || request.client?.name || "Verified Client"}
-                        </p>
-                      </div>
-                      <div className="pt-2 border-t border-[var(--border)]">
-                        <span className="text-[var(--muted-foreground)]">Client Budget:</span>
-                        <p className="font-semibold text-sm text-[var(--primary)] mt-0.5">
-                          {request.budgetMin && request.budgetMax ? `${formatCurrency(request.budgetMin)} – ${formatCurrency(request.budgetMax)}` : "Open"}
-                        </p>
-                      </div>
-                      {request.deadline && (
-                        <div className="pt-2 border-t border-[var(--border)]">
-                          <span className="text-[var(--muted-foreground)]">Deadline:</span>
-                          <p className="font-semibold text-[var(--foreground)] mt-0.5">
-                            {formatDate(request.deadline)}
-                          </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {milestones.map((m, idx) => (
+                      <div
+                        key={m.id}
+                        className="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]/50 space-y-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-[var(--primary)] uppercase tracking-wider">
+                            Milestone {idx + 1}
+                          </span>
+                          {milestones.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMilestone(m.id)}
+                              className="text-red-500 hover:text-red-600 p-1 cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
 
-                  <Card className="border-dashed bg-[var(--muted)]/10">
-                    <CardContent className="p-4 space-y-2.5 text-xs text-[var(--muted-foreground)]">
-                      <p className="font-semibold text-[var(--foreground)] flex items-center gap-1.5">
-                        <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                        Winning Proposal Checklist
-                      </p>
-                      <ul className="space-y-1.5 list-disc pl-4 leading-relaxed">
-                        <li>Break deliverables into distinct milestones</li>
-                        <li>Reference concrete technical libraries</li>
-                        <li>Propose realistic timeline with testing buffers</li>
-                        <li>Maintain clear communication via CampusCode chat</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs mb-1 block">Deliverable Title</Label>
+                            <Input
+                              value={m.title}
+                              onChange={(e) => handleMilestoneChange(m.id, "title", e.target.value)}
+                              placeholder="e.g. Backend API & PostgreSQL Schema"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs mb-1 block">Amount (₹)</Label>
+                            <Input
+                              type="number"
+                              min="500"
+                              step="500"
+                              value={m.amount || ""}
+                              onChange={(e) => handleMilestoneChange(m.id, "amount", Number(e.target.value))}
+                              placeholder="Amount"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)] pt-2">
+                      <span>Total Milestones Sum: <strong className="text-[var(--foreground)]">{formatCurrency(totalMilestonesAmount)}</strong></span>
+                      {totalMilestonesAmount !== price && (
+                        <span className="text-amber-500">
+                          Sum ({formatCurrency(totalMilestonesAmount)}) differs from Bid ({formatCurrency(price)})
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Submit Actions */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border)]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsSubmittingMode(false)}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="gap-2 shadow-lg cursor-pointer"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" /> Publish & Submit Proposal
+                      </>
+                    )}
+                  </Button>
                 </div>
               </form>
             )}

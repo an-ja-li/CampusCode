@@ -2,16 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Lightbulb, Settings,
-  FileText, Calendar, DollarSign, Upload, Eye, Rocket,
+  FileText, Calendar, DollarSign, Upload, Rocket, Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input, Textarea, Label } from "@/components/ui/input";
-import { SOLUTION_TYPES, BUDGET_RANGES, TECHNOLOGIES } from "@/lib/constants";
+import { Badge } from "@/components/ui/badge";
+import { SOLUTION_TYPES, BUDGET_RANGES } from "@/lib/constants";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const steps = [
   { id: 1, label: "Problem", icon: Lightbulb },
@@ -24,16 +28,189 @@ const steps = [
 ];
 
 export default function PostRequirementPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+
   const [step, setStep] = useState(1);
-  const [selectedType, setSelectedType] = useState("");
-  const [selectedBudget, setSelectedBudget] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedType, setSelectedType] = useState("web");
+  const [requiredFeatures, setRequiredFeatures] = useState("");
+  const [preferredTech, setPreferredTech] = useState("");
+  const [integrations, setIntegrations] = useState("");
+  const [platform, setPlatform] = useState("Web");
+  const [expectedDeliverables, setExpectedDeliverables] = useState("");
   const [pricingType, setPricingType] = useState<"fixed" | "open">("fixed");
+  const [selectedBudget, setSelectedBudget] = useState("10000-25000");
+  const [customMin, setCustomMin] = useState("10000");
+  const [customMax, setCustomMax] = useState("30000");
+  const [deadline, setDeadline] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (fieldName: string) => {
+    if (fieldErrors[fieldName]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
+
+  const validateStep = (currentStep: number): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (currentStep === 1) {
+      if (!title.trim()) {
+        newErrors.title = "Requirement title is required.";
+      } else if (title.trim().length < 5) {
+        newErrors.title = "Title must be at least 5 characters.";
+      }
+
+      if (!description.trim()) {
+        newErrors.description = "Please describe the problem you need solved.";
+      } else if (description.trim().length < 15) {
+        newErrors.description = "Please provide more details (at least 15 characters).";
+      }
+    }
+
+    if (currentStep === 2) {
+      if (!selectedType) {
+        newErrors.selectedType = "Please select a solution type.";
+      }
+    }
+
+    if (currentStep === 3) {
+      if (!requiredFeatures.trim()) {
+        newErrors.requiredFeatures = "Please specify at least one required feature.";
+      }
+    }
+
+    if (currentStep === 4) {
+      if (pricingType === "fixed") {
+        if (selectedBudget === "custom") {
+          const minVal = Number(customMin);
+          const maxVal = Number(customMax);
+          if (!customMin || isNaN(minVal) || minVal <= 0) {
+            newErrors.budget = "Please enter a valid minimum budget.";
+          } else if (!customMax || isNaN(maxVal) || maxVal < minVal) {
+            newErrors.budget = "Maximum budget must be greater than or equal to minimum budget.";
+          }
+        }
+      }
+    }
+
+    if (currentStep === 5) {
+      if (!deadline) {
+        newErrors.deadline = "Please select an expected completion date.";
+      }
+    }
+
+    setFieldErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = (nextStep: number) => {
+    if (validateStep(step)) {
+      setFieldErrors({});
+      setStep(nextStep);
+    }
+  };
+
+  const handleStepClick = (targetStep: number) => {
+    if (targetStep < step) {
+      setFieldErrors({});
+      setStep(targetStep);
+    } else if (targetStep > step) {
+      // Validate all steps from current up to target
+      let canProceed = true;
+      for (let s = 1; s < targetStep; s++) {
+        if (!validateStep(s)) {
+          canProceed = false;
+          setStep(s);
+          break;
+        }
+      }
+      if (canProceed) {
+        setFieldErrors({});
+        setStep(targetStep);
+      }
+    }
+  };
+
+  const handlePublish = async () => {
+    // Validate all mandatory steps before publishing
+    for (let s = 1; s <= 5; s++) {
+      if (!validateStep(s)) {
+        setStep(s);
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+      setError("");
+
+      const budgetRange = BUDGET_RANGES.find((b) => b.id === selectedBudget);
+      const min = pricingType === "fixed" ? (budgetRange?.min ?? (Number(customMin) || 10000)) : null;
+      const max = pricingType === "fixed" ? (budgetRange?.max ?? (Number(customMax) || 50000)) : null;
+
+      const techList = preferredTech
+        ? preferredTech.split(",").map((t) => t.trim()).filter(Boolean)
+        : ["React", "Node.js"];
+      const featuresList = requiredFeatures
+        ? requiredFeatures.split("\n").map((f) => f.trim()).filter(Boolean)
+        : [];
+      const deliverablesList = expectedDeliverables
+        ? expectedDeliverables.split("\n").map((d) => d.trim()).filter(Boolean)
+        : [];
+
+      const res = await fetch("/api/solutions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          problemStatement: description.trim(),
+          category: selectedType || "web",
+          solutionType: selectedType || "web",
+          difficulty: "intermediate",
+          budgetMin: min,
+          budgetMax: max,
+          isFixedPrice: pricingType === "fixed",
+          preferredTechnologies: techList,
+          requiredFeatures: featuresList,
+          expectedDeliverables: deliverablesList,
+          deadline: deadline || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to publish requirement");
+      }
+
+      router.push("/solutions");
+    } catch (err: unknown) {
+      console.error("[Post Requirement Error]:", err);
+      setError(err instanceof Error ? err.message : "Failed to publish requirement");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectedBudgetObj = BUDGET_RANGES.find((b) => b.id === selectedBudget);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold mb-1">Post a Requirement</h1>
-        <p className="text-[var(--muted-foreground)] mb-8">Describe your software need and let student developers build it</p>
+        <p className="text-[var(--muted-foreground)] mb-8">
+          Describe your software need and let talented student developers build it
+        </p>
       </motion.div>
 
       {/* Step Indicator */}
@@ -41,91 +218,197 @@ export default function PostRequirementPage() {
         {steps.map((s, i) => (
           <div key={s.id} className="flex items-center gap-1">
             <button
-              onClick={() => s.id <= step && setStep(s.id)}
+              onClick={() => handleStepClick(s.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                step === s.id ? "bg-[var(--primary)] text-white" : step > s.id ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-[var(--muted)] text-[var(--muted-foreground)]"
+                step === s.id
+                  ? "bg-[var(--primary)] text-white shadow-sm"
+                  : step > s.id
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                  : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
               }`}
             >
               {step > s.id ? <CheckCircle2 className="h-3 w-3" /> : <s.icon className="h-3 w-3" />}
               <span className="hidden sm:inline">{s.label}</span>
             </button>
-            {i < steps.length - 1 && <div className={`w-4 h-0.5 shrink-0 ${step > s.id ? "bg-emerald-400" : "bg-[var(--border)]"}`} />}
+            {i < steps.length - 1 && (
+              <div className={`w-4 h-0.5 shrink-0 ${step > s.id ? "bg-emerald-400" : "bg-[var(--border)]"}`} />
+            )}
           </div>
         ))}
       </div>
 
+      {/* STEP 1: Problem */}
       {step === 1 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>What problem do you want solved?</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>What problem do you want solved?</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label className="mb-1.5 block">Requirement Title</Label>
-                <Input placeholder="e.g., AI-Powered Resume Screening System" />
+                <Label className="mb-1.5 block">
+                  Requirement Title <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  placeholder="e.g., AI-Powered Resume Screening System"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    clearFieldError("title");
+                  }}
+                  className={fieldErrors.title ? "border-red-500 focus-visible:ring-red-500" : ""}
+                />
+                {fieldErrors.title && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {fieldErrors.title}
+                  </p>
+                )}
               </div>
+
               <div>
-                <Label className="mb-1.5 block">Describe Your Problem</Label>
-                <Textarea placeholder="Describe the problem you need solved in detail. What are you trying to achieve? What are the pain points?" rows={6} />
+                <Label className="mb-1.5 block">
+                  Describe Your Problem <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  placeholder="Describe the problem you need solved in detail. What are you trying to achieve? What are the pain points?"
+                  rows={6}
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    clearFieldError("description");
+                  }}
+                  className={fieldErrors.description ? "border-red-500 focus-visible:ring-red-500" : ""}
+                />
+                {fieldErrors.description && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {fieldErrors.description}
+                  </p>
+                )}
               </div>
+
               <div className="p-4 rounded-lg bg-[var(--muted)]/50 text-sm">
                 <p className="font-medium mb-1">💡 Example:</p>
-                <p className="text-[var(--muted-foreground)]">I need a web application for managing inventory for a small retail business. Currently we track everything in spreadsheets which leads to errors and stock-outs.</p>
+                <p className="text-[var(--muted-foreground)]">
+                  I need a web application for managing inventory for a small retail business. Currently we track everything in spreadsheets which leads to errors and stock-outs.
+                </p>
               </div>
+
               <div className="flex justify-end pt-2">
-                <Button onClick={() => setStep(2)}>Next <ArrowRight className="h-4 w-4" /></Button>
+                <Button onClick={() => handleNext(2)} className="gap-1.5">
+                  Next <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
+      {/* STEP 2: Solution Type */}
       {step === 2 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>What type of solution do you need?</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                What type of solution do you need? <span className="text-red-500">*</span>
+              </CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid sm:grid-cols-3 gap-3">
                 {SOLUTION_TYPES.map((type) => (
                   <button
                     key={type.id}
-                    onClick={() => setSelectedType(type.id)}
+                    onClick={() => {
+                      setSelectedType(type.id);
+                      clearFieldError("selectedType");
+                    }}
                     className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
-                      selectedType === type.id ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/30"
+                      selectedType === type.id
+                        ? "border-[var(--primary)] bg-[var(--primary)]/10 font-semibold shadow-sm"
+                        : "border-[var(--border)] hover:border-[var(--primary)]/40 hover:bg-[var(--muted)]/40"
                     }`}
                   >
                     <p className="font-medium text-sm">{type.label}</p>
                   </button>
                 ))}
               </div>
+              {fieldErrors.selectedType && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> {fieldErrors.selectedType}
+                </p>
+              )}
               <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-                <Button onClick={() => setStep(3)}>Next <ArrowRight className="h-4 w-4" /></Button>
+                <Button variant="outline" onClick={() => setStep(1)} className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button onClick={() => handleNext(3)} className="gap-1.5">
+                  Next <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
+      {/* STEP 3: Requirements & Details */}
       {step === 3 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>Requirements & Details</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Requirements & Details</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label className="mb-1.5 block">Required Features</Label>
-                <Textarea placeholder="List the features you need (one per line)..." rows={5} />
+                <Label className="mb-1.5 block">
+                  Required Features <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  placeholder="List key features you need (one per line, e.g.):&#10;User authentication & role-based access&#10;Real-time dashboard and reports&#10;Automated email notifications"
+                  rows={5}
+                  value={requiredFeatures}
+                  onChange={(e) => {
+                    setRequiredFeatures(e.target.value);
+                    clearFieldError("requiredFeatures");
+                  }}
+                  className={fieldErrors.requiredFeatures ? "border-red-500 focus-visible:ring-red-500" : ""}
+                />
+                {fieldErrors.requiredFeatures && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {fieldErrors.requiredFeatures}
+                  </p>
+                )}
               </div>
+
               <div>
-                <Label className="mb-1.5 block">Preferred Technology</Label>
-                <Input placeholder="React, Node.js, PostgreSQL..." />
+                <Label className="mb-1.5 block">
+                  Preferred Technologies <span className="text-xs text-[var(--muted-foreground)] font-normal">(Optional)</span>
+                </Label>
+                <Input
+                  placeholder="e.g. React, Next.js, Node.js, PostgreSQL"
+                  value={preferredTech}
+                  onChange={(e) => setPreferredTech(e.target.value)}
+                />
               </div>
+
               <div>
-                <Label className="mb-1.5 block">Integrations</Label>
-                <Input placeholder="Payment gateway, Email, SMS..." />
+                <Label className="mb-1.5 block">
+                  Integrations <span className="text-xs text-[var(--muted-foreground)] font-normal">(Optional)</span>
+                </Label>
+                <Input
+                  placeholder="e.g. Stripe, Razorpay, Twilio, SendGrid"
+                  value={integrations}
+                  onChange={(e) => setIntegrations(e.target.value)}
+                />
               </div>
+
               <div>
-                <Label className="mb-1.5 block">Platform</Label>
-                <select className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 py-2 text-sm custom-select cursor-pointer">
+                <Label className="mb-1.5 block">
+                  Target Platform <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 py-2 text-sm custom-select cursor-pointer"
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                >
                   <option>Web</option>
                   <option>Mobile (Android)</option>
                   <option>Mobile (iOS)</option>
@@ -134,106 +417,216 @@ export default function PostRequirementPage() {
                   <option>Web + Mobile</option>
                 </select>
               </div>
+
               <div>
-                <Label className="mb-1.5 block">Expected Deliverables</Label>
-                <Textarea placeholder="Source code, Documentation, Deployment..." rows={3} />
+                <Label className="mb-1.5 block">
+                  Expected Deliverables <span className="text-xs text-[var(--muted-foreground)] font-normal">(Optional)</span>
+                </Label>
+                <Textarea
+                  placeholder="e.g. Complete source code with documentation, deployed production build, API documentation"
+                  rows={3}
+                  value={expectedDeliverables}
+                  onChange={(e) => setExpectedDeliverables(e.target.value)}
+                />
               </div>
+
               <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-                <Button onClick={() => setStep(4)}>Next <ArrowRight className="h-4 w-4" /></Button>
+                <Button variant="outline" onClick={() => setStep(2)} className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button onClick={() => handleNext(4)} className="gap-1.5">
+                  Next <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
+      {/* STEP 4: Budget */}
       {step === 4 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>Budget</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                Budget & Pricing <span className="text-red-500">*</span>
+              </CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <button
                   onClick={() => setPricingType("fixed")}
-                  className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${pricingType === "fixed" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)]"}`}
+                  className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                    pricingType === "fixed"
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10 shadow-sm"
+                      : "border-[var(--border)] hover:border-[var(--primary)]/30"
+                  }`}
                 >
-                  <p className="font-semibold">Fixed Price</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">Set a budget range</p>
+                  <p className="font-semibold">Fixed Budget Range</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Set an estimated budget for the project</p>
                 </button>
                 <button
                   onClick={() => setPricingType("open")}
-                  className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${pricingType === "open" ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)]"}`}
+                  className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                    pricingType === "open"
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10 shadow-sm"
+                      : "border-[var(--border)] hover:border-[var(--primary)]/30"
+                  }`}
                 >
                   <p className="font-semibold">Open to Proposals</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">Let developers suggest</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Let developers propose their price</p>
                 </button>
               </div>
 
               {pricingType === "fixed" && (
                 <div className="space-y-2">
-                  {BUDGET_RANGES.filter((b) => b.id !== "custom").map((budget) => (
+                  <Label className="mb-1 block text-xs font-semibold text-[var(--muted-foreground)]">
+                    Select a Budget Tier <span className="text-red-500">*</span>
+                  </Label>
+                  {BUDGET_RANGES.map((budget) => (
                     <button
                       key={budget.id}
-                      onClick={() => setSelectedBudget(budget.id)}
+                      onClick={() => {
+                        setSelectedBudget(budget.id);
+                        clearFieldError("budget");
+                      }}
                       className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer text-left ${
-                        selectedBudget === budget.id ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:bg-[var(--muted)]"
+                        selectedBudget === budget.id
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 font-medium"
+                          : "border-[var(--border)] hover:bg-[var(--muted)]"
                       }`}
                     >
-                      <div className={`h-4 w-4 rounded-full border-2 ${selectedBudget === budget.id ? "border-[var(--primary)] bg-[var(--primary)]" : "border-[var(--border)]"}`} />
+                      <div
+                        className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${
+                          selectedBudget === budget.id ? "border-[var(--primary)] bg-[var(--primary)]" : "border-[var(--border)]"
+                        }`}
+                      >
+                        {selectedBudget === budget.id && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </div>
                       <span className="text-sm font-medium">{budget.label}</span>
                     </button>
                   ))}
-                  <div className="grid grid-cols-2 gap-3 pt-2">
-                    <div>
-                      <Label className="mb-1.5 block">Custom Min (₹)</Label>
-                      <Input type="number" placeholder="5000" />
+
+                  {selectedBudget === "custom" && (
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <Label className="mb-1.5 block">
+                          Custom Min (₹) <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="5000"
+                          value={customMin}
+                          onChange={(e) => {
+                            setCustomMin(e.target.value);
+                            clearFieldError("budget");
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <Label className="mb-1.5 block">
+                          Custom Max (₹) <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="50000"
+                          value={customMax}
+                          onChange={(e) => {
+                            setCustomMax(e.target.value);
+                            clearFieldError("budget");
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <Label className="mb-1.5 block">Custom Max (₹)</Label>
-                      <Input type="number" placeholder="50000" />
-                    </div>
-                  </div>
+                  )}
+
+                  {fieldErrors.budget && (
+                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> {fieldErrors.budget}
+                    </p>
+                  )}
                 </div>
               )}
+
               <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={() => setStep(3)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-                <Button onClick={() => setStep(5)}>Next <ArrowRight className="h-4 w-4" /></Button>
+                <Button variant="outline" onClick={() => setStep(3)} className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button onClick={() => handleNext(5)} className="gap-1.5">
+                  Next <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
+      {/* STEP 5: Timeline & Priority */}
       {step === 5 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>Timeline & Priority</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Timeline & Priority</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label className="mb-1.5 block">Expected Completion Date</Label>
-                <Input type="date" />
+                <Label className="mb-1.5 block">
+                  Expected Completion Date <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  min={new Date().toISOString().split("T")[0]}
+                  value={deadline}
+                  onChange={(e) => {
+                    setDeadline(e.target.value);
+                    clearFieldError("deadline");
+                  }}
+                  className={fieldErrors.deadline ? "border-red-500 focus-visible:ring-red-500" : ""}
+                />
+                {fieldErrors.deadline && (
+                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {fieldErrors.deadline}
+                  </p>
+                )}
               </div>
+
               <div>
-                <Label className="mb-1.5 block">Priority</Label>
-                <select className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 py-2 text-sm custom-select cursor-pointer">
+                <Label className="mb-1.5 block">
+                  Priority Level <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  className="flex h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] px-3 py-2 text-sm custom-select cursor-pointer"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                >
                   <option value="low">Low — Flexible timeline</option>
-                  <option value="medium">Medium — Within deadline</option>
+                  <option value="medium">Medium — Standard timeline</option>
                   <option value="high">High — Urgent requirement</option>
                 </select>
               </div>
+
               <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={() => setStep(4)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-                <Button onClick={() => setStep(6)}>Next <ArrowRight className="h-4 w-4" /></Button>
+                <Button variant="outline" onClick={() => setStep(4)} className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button onClick={() => handleNext(6)} className="gap-1.5">
+                  Next <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
+      {/* STEP 6: Attachments */}
       {step === 6 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>Attachments</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                Attachments <span className="text-xs text-[var(--muted-foreground)] font-normal">(Optional)</span>
+              </CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="border-2 border-dashed border-[var(--border)] rounded-xl p-8 text-center">
                 <Upload className="h-10 w-10 mx-auto text-[var(--muted-foreground)]/50 mb-3" />
@@ -242,28 +635,100 @@ export default function PostRequirementPage() {
                 <Button variant="outline" size="sm" className="mt-3">Choose Files</Button>
               </div>
               <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={() => setStep(5)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-                <Button onClick={() => setStep(7)}>Next <ArrowRight className="h-4 w-4" /></Button>
+                <Button variant="outline" onClick={() => setStep(5)} className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+                <Button onClick={() => handleNext(7)} className="gap-1.5">
+                  Review & Publish <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
+      {/* STEP 7: Publish & Review */}
       {step === 7 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-          <Card className="text-center">
-            <CardContent className="p-8 sm:p-12">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 mx-auto mb-6">
-                <Rocket className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+          <Card>
+            <CardContent className="p-6 sm:p-8">
+              <div className="text-center mb-6">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 mx-auto mb-3">
+                  <Rocket className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <h2 className="text-xl sm:text-2xl font-bold mb-1">Review & Publish Requirement</h2>
+                <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">
+                  Verify your requirement details below before making it live for developers.
+                </p>
               </div>
-              <h2 className="text-2xl font-bold mb-2">Ready to publish?</h2>
-              <p className="text-[var(--muted-foreground)] mb-8 max-w-md mx-auto">Your requirement will be visible to student developers who can submit proposals.</p>
+
+              {/* Requirement Summary Box */}
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/20 p-5 space-y-4 mb-6">
+                <div>
+                  <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Title</span>
+                  <h3 className="font-semibold text-base mt-0.5">{title || "Untitled Requirement"}</h3>
+                </div>
+
+                <div>
+                  <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Problem Description</span>
+                  <p className="text-sm text-[var(--foreground)] mt-0.5 line-clamp-3">{description}</p>
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-4 pt-2 border-t border-[var(--border)]">
+                  <div>
+                    <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Solution Type</span>
+                    <p className="text-sm font-medium mt-0.5 capitalize">{selectedType}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Budget</span>
+                    <p className="text-sm font-medium mt-0.5">
+                      {pricingType === "fixed"
+                        ? selectedBudget === "custom"
+                          ? `${formatCurrency(Number(customMin) || 0)} – ${formatCurrency(Number(customMax) || 0)}`
+                          : selectedBudgetObj?.label || "Fixed"
+                        : "Open to Proposals"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Target Deadline</span>
+                    <p className="text-sm font-medium mt-0.5">{deadline ? formatDate(deadline) : "Flexible"}</p>
+                  </div>
+                </div>
+
+                {requiredFeatures && (
+                  <div className="pt-2 border-t border-[var(--border)]">
+                    <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Required Features</span>
+                    <ul className="list-disc list-inside text-xs mt-1 space-y-0.5 text-[var(--muted-foreground)]">
+                      {requiredFeatures.split("\n").filter(Boolean).slice(0, 4).map((f, idx) => (
+                        <li key={idx} className="truncate">{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div className="p-3 mb-6 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm max-w-md mx-auto flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button variant="outline" onClick={() => setStep(6)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-                <Link href="/solutions">
-                  <Button size="lg"><Rocket className="h-4 w-4" /> Publish Requirement</Button>
-                </Link>
+                <Button variant="outline" onClick={() => setStep(6)} disabled={submitting} className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" /> Back to Edit
+                </Button>
+                <Button size="lg" onClick={handlePublish} disabled={submitting} className="gap-2">
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="h-4 w-4" /> Publish Requirement
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>

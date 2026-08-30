@@ -13,8 +13,20 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const search = searchParams.get('search');
     const sort = searchParams.get('sort') || 'newest';
+    const clientId = searchParams.get('clientId');
+    const mine = searchParams.get('mine');
 
     const where: Prisma.SolutionRequestWhereInput = {};
+
+    if (mine === 'true') {
+      const session = await auth();
+      if (!session?.user?.id) {
+        return NextResponse.json({ requests: [], total: 0 });
+      }
+      where.clientId = session.user.id;
+    } else if (clientId) {
+      where.clientId = clientId;
+    }
 
     if (category && category !== 'all') {
       where.category = category;

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FileText, Clock, MessageSquare, Send, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,9 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, getStatusColor } from "@/lib/utils";
 import { useUserData } from "@/lib/user-store";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ProposalsPage() {
   const { proposals, isLoaded } = useUserData();
+  const { user } = useAuth();
+  const router = useRouter();
+  const [chatLoadingId, setChatLoadingId] = useState<string | null>(null);
+  const isClient = user?.role?.toLowerCase() === "client";
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -75,7 +82,39 @@ export default function ProposalsPage() {
                       {proposal.status === "accepted" && (
                         <Link href="/contracts"><Button size="sm">View Contract</Button></Link>
                       )}
-                      <Button variant="outline" size="sm"><MessageSquare className="h-3.5 w-3.5" /></Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 cursor-pointer"
+                        disabled={chatLoadingId === proposal.id}
+                        onClick={async () => {
+                          setChatLoadingId(proposal.id);
+                          try {
+                            const res = await fetch("/api/messages/conversations", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                proposalId: proposal.id,
+                                context: { type: "proposal", id: proposal.id },
+                              }),
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              router.push(`/messages?conv=${data.conversation.id}`);
+                            } else {
+                              const err = await res.json();
+                              console.error("Failed to start chat:", err);
+                            }
+                          } catch (err) {
+                            console.error("Failed to start conversation:", err);
+                          } finally {
+                            setChatLoadingId(null);
+                          }
+                        }}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span className="text-xs">{isClient ? "Message Developer" : "Message Client"}</span>
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

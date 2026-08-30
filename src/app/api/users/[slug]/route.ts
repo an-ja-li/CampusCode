@@ -1,5 +1,5 @@
 // ============================================================
-// CampusCode — Public User/Student Portfolio API Route
+// CampusCode — Public User/Student Portfolio & Client Profile API Route
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -7,7 +7,7 @@ import { db } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
+  { params }: { params: Promise<{ id?: string; slug: string }> }
 ) {
   try {
     const { slug } = await params;
@@ -35,6 +35,9 @@ export async function GET(
           where: { status: 'PUBLISHED' },
         },
         ownedProjects: true,
+        solutionRequests: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 

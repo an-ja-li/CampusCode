@@ -1,19 +1,21 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Clock, DollarSign, Calendar, CheckCircle2, Circle,
-  AlertCircle, MessageSquare, Star, ShieldCheck, FileCheck, Upload,
+  AlertCircle, MessageSquare, Star, ShieldCheck, FileCheck, Upload, Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { contracts } from "@/lib/mock-data";
+import { contracts as fallbackContracts } from "@/lib/mock-data";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
-import type { ContractMilestoneItem } from "@/types";
+import { useAuth } from "@/hooks/useAuth";
+import type { Contract, ContractMilestoneItem } from "@/types";
 
 function getMilestoneIcon(status: ContractMilestoneItem["status"]) {
   switch (status) {
@@ -42,7 +44,51 @@ function getMilestoneBadgeVariant(status: ContractMilestoneItem["status"]): "suc
 
 export default function ContractDetailPage() {
   const params = useParams();
-  const contract = contracts.find((c) => c.id === params.id);
+  const router = useRouter();
+  const { user } = useAuth();
+  const isClient = user?.role?.toLowerCase() === "client";
+  const [messagingLoading, setMessagingLoading] = useState(false);
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadContract() {
+      try {
+        const res = await fetch(`/api/contracts/${params.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data && !data.error) {
+            setContract(data);
+            return;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+
+      const fallback = fallbackContracts.find((c) => c.id === params.id);
+      if (!cancelled && fallback) {
+        setContract(fallback);
+      }
+    }
+
+    loadContract().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id]);
+
+  if (loading) {
+    return (
+      <div className="p-16 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--muted-foreground)]" />
+      </div>
+    );
+  }
 
   if (!contract) {
     return (
@@ -89,12 +135,38 @@ export default function ContractDetailPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Link href="/messages">
-              <Button variant="outline" className="gap-1.5">
-                <MessageSquare className="h-4 w-4" /> Message
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                disabled={messagingLoading}
+                onClick={async () => {
+                  const otherUserId = isClient ? contract.studentId : contract.clientId;
+                  setMessagingLoading(true);
+                  try {
+                    const res = await fetch("/api/messages/conversations", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        participantId: otherUserId,
+                        contractId: contract.id,
+                        context: { type: "contract", id: contract.id },
+                      }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      router.push(`/messages?conv=${data.conversation.id}`);
+                    }
+                  } catch (err) {
+                    console.error("Failed to start conversation:", err);
+                  } finally {
+                    setMessagingLoading(false);
+                  }
+                }}
+              >
+                <MessageSquare className="h-4 w-4" />
+                {isClient ? "Message Developer" : "Message Client"}
               </Button>
-            </Link>
-            {activeMilestone && (
+            {!isClient && activeMilestone && (
               <Button className="gap-1.5">
                 <Upload className="h-4 w-4" /> Submit Milestone
               </Button>
@@ -143,15 +215,25 @@ export default function ContractDetailPage() {
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div className="p-3 rounded-xl bg-[var(--muted)]/30">
                     <p className="text-xl font-bold">{formatCurrency(contract.totalAmount)}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">Project Value</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {isClient ? "Total Contract" : "Project Value"}
+                    </p>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20">
-                    <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(contract.platformFee)}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">Platform Fee (10%)</p>
+                    <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+                      {formatCurrency(releasedAmount)}
+                    </p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {isClient ? "Paid Out" : "Platform Fee (10%)"}
+                    </p>
                   </div>
                   <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
-                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(contract.studentEarnings)}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">Your Earnings</p>
+                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(isClient ? Math.max(0, contract.totalAmount - releasedAmount) : contract.studentEarnings)}
+                    </p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {isClient ? "In Escrow" : "Your Earnings"}
+                    </p>
                   </div>
                 </div>
 
@@ -202,12 +284,20 @@ export default function ContractDetailPage() {
                       </div>
                       {/* Milestone actions */}
                       <div className="shrink-0">
-                        {milestone.status === "in_progress" && (
+                        {milestone.status === "in_progress" && !isClient && (
                           <Button size="sm" className="text-xs gap-1">
                             <Upload className="h-3 w-3" /> Submit
                           </Button>
                         )}
-                        {milestone.status === "submitted" && (
+                        {milestone.status === "in_progress" && isClient && (
+                          <Badge variant="warning" className="text-xs">In Development</Badge>
+                        )}
+                        {milestone.status === "submitted" && isClient && (
+                          <Button size="sm" className="text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white">
+                            <CheckCircle2 className="h-3 w-3" /> Approve & Release
+                          </Button>
+                        )}
+                        {milestone.status === "submitted" && !isClient && (
                           <Badge variant="default" className="text-xs">Awaiting Review</Badge>
                         )}
                       </div>

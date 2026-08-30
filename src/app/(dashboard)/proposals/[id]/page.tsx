@@ -1,7 +1,8 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Clock, DollarSign, Calendar, Code2, Star,
@@ -13,9 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { proposals, solutionRequests } from "@/lib/mock-data";
 import { formatCurrency, formatRelativeTime, getStatusColor } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ProposalDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { user } = useAuth();
+  const isClient = user?.role?.toLowerCase() === "client";
+  const [messagingLoading, setMessagingLoading] = useState(false);
   const proposal = proposals.find((p) => p.id === params.id);
 
   if (!proposal) {
@@ -56,8 +62,36 @@ export default function ProposalDetailPage() {
                 <Button variant="outline" className="text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 gap-1.5">
                   <XCircle className="h-4 w-4" /> Withdraw
                 </Button>
-                <Button className="gap-1.5">
-                  <MessageSquare className="h-4 w-4" /> Message Client
+                <Button
+                  className="gap-1.5"
+                  disabled={messagingLoading}
+                  onClick={async () => {
+                    // Client messages the student, student messages the client
+                    const otherUserId = isClient ? proposal.studentId : request?.clientId;
+                    setMessagingLoading(true);
+                    try {
+                      const res = await fetch("/api/messages/conversations", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          participantId: otherUserId,
+                          proposalId: proposal.id,
+                          context: { type: "proposal", id: proposal.id },
+                        }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        router.push(`/messages?conv=${data.conversation.id}`);
+                      }
+                    } catch (err) {
+                      console.error("Failed to start conversation:", err);
+                    } finally {
+                      setMessagingLoading(false);
+                    }
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  {isClient ? "Message Developer" : "Message Client"}
                 </Button>
               </>
             )}
