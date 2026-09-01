@@ -40,6 +40,41 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+
+    const updated = await db.project.update({
+      where: { id },
+      data: {
+        name: body.name !== undefined ? body.name : undefined,
+        description: body.description !== undefined ? body.description : undefined,
+        githubRepo: body.githubRepo !== undefined ? body.githubRepo : undefined,
+        category: body.category !== undefined ? body.category : undefined,
+        technologies: body.technologies !== undefined ? body.technologies : undefined,
+        status: body.status !== undefined ? body.status : undefined,
+        progress: body.progress !== undefined ? body.progress : undefined,
+        isPublished: body.isPublished !== undefined ? body.isPublished : undefined,
+      },
+      include: {
+        owner: true,
+        members: { include: { user: true } },
+        tasks: { include: { subtasks: true } },
+        milestones: true,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error('[API Project PATCH Error]:', error);
+    return NextResponse.json({ error: 'Failed to update project' }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

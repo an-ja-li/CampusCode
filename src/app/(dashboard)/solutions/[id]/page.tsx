@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Input, Textarea, Label } from "@/components/ui/input";
-import { solutionRequests as fallbackRequests } from "@/lib/mock-data";
 import { formatCurrency, formatRelativeTime, formatDate, getStatusColor } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import type { SolutionRequest, Proposal } from "@/types";
@@ -45,8 +44,49 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
   const [selectedTechs, setSelectedTechs] = useState<string[]>([]);
   const [milestones, setMilestones] = useState<MilestoneInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [isAiGeneratingPitch, setIsAiGeneratingPitch] = useState(false);
+  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const handleAiGeneratePitch = async () => {
+    if (!request) return;
+    setIsAiGeneratingPitch(true);
+    setAiSuccessMessage(null);
+
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "suggest_proposal",
+          requirementTitle: request.title,
+          requirementDescription: request.problemStatement || request.description,
+          budgetMin: request.budgetMin,
+          budgetMax: request.budgetMax,
+          studentSkills: selectedTechs.length > 0 ? selectedTechs : ["React", "TypeScript", "Node.js", "Tailwind CSS"],
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.proposal) {
+          if (data.proposal.pitch) {
+            setCoverLetter(data.proposal.pitch);
+          }
+          if (data.proposal.suggestedPrice && price === 0) {
+            setPrice(data.proposal.suggestedPrice);
+          }
+          setAiSuccessMessage("✨ AI proposal pitch generated! Feel free to customize.");
+          setTimeout(() => setAiSuccessMessage(null), 4000);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to generate AI pitch:", err);
+    } finally {
+      setIsAiGeneratingPitch(false);
+    }
+  };
 
   const isClient = user?.role?.toLowerCase() === "client";
   const isOwner = Boolean(user?.id && request?.clientId === user.id);
@@ -74,20 +114,6 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
         }
       } catch (err) {
         console.error("[SolutionDetail] Error fetching requirement:", err);
-      }
-
-      // Fallback
-      const fallback = fallbackRequests.find((sr) => sr.id === id);
-      if (!cancelled && fallback) {
-        setRequest(fallback);
-        const initialPrice = fallback.budgetMin || 20000;
-        setPrice(initialPrice);
-        setSelectedTechs(fallback.preferredTechnologies || []);
-        setMilestones([
-          { id: "m1", title: "Architecture & Schema Setup", amount: Math.round(initialPrice * 0.4), durationDays: 5 },
-          { id: "m2", title: "Feature Development", amount: Math.round(initialPrice * 0.4), durationDays: 6 },
-          { id: "m3", title: "Testing & Deployment", amount: Math.round(initialPrice * 0.2), durationDays: 3 },
-        ]);
       }
     }
 
@@ -886,13 +912,34 @@ export default function SolutionDetailPage({ params }: { params: Promise<{ id: s
 
                 {/* Section 1: Pitch & Approach */}
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
                       <FileText className="h-5 w-5 text-[var(--primary)]" />
                       1. Cover Pitch & Solution Architecture
                     </CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAiGeneratePitch}
+                      disabled={isAiGeneratingPitch}
+                      className="gap-1.5 text-xs text-[var(--primary)] border-[var(--primary)]/30 hover:bg-[var(--primary)]/10 cursor-pointer"
+                    >
+                      {isAiGeneratingPitch ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5 text-[var(--primary)]" />
+                      )}
+                      <span>{isAiGeneratingPitch ? "Drafting..." : "AI Auto-Pitch"}</span>
+                    </Button>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {aiSuccessMessage && (
+                      <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 shrink-0" />
+                        <span>{aiSuccessMessage}</span>
+                      </div>
+                    )}
                     <div>
                       <Label className="text-sm font-medium mb-1.5 block">
                         Describe how you will solve this problem *

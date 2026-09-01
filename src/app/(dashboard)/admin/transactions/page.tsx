@@ -4,12 +4,14 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight, DollarSign, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { transactions, platformStats } from "@/lib/mock-data";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
+import type { Transaction } from "@/types";
 
 export default function AdminTransactionsPage() {
+  const transactions: Transaction[] = [];
   const totalVolume = transactions.reduce((s, t) => s + t.amount, 0);
   const completed = transactions.filter((t) => t.status === "completed").length;
+  const platformStats = { totalTransactions: 0, totalEarnings: 0 };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">

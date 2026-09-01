@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { formatCurrency, formatRelativeTime, formatDate } from "@/lib/utils";
-import { students as fallbackStudents, products as fallbackProducts, projects as fallbackProjects, clients as fallbackClients } from "@/lib/mock-data";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserData } from "@/lib/user-store";
 import type { User, Product, Project, SolutionRequest } from "@/types";
@@ -65,28 +64,8 @@ export default function PortfolioPage({ params }: { params: Promise<{ slug: stri
         console.error("[Portfolio] Error fetching user profile:", err);
       }
 
-      // Fallback to seeded directory (Students or Clients)
-      const fallbackS = fallbackStudents.find((s) => {
-        const pUrl = (s.studentProfile?.portfolioUrl || "").toLowerCase().replace(/^@/, "");
-        const sName = s.name.toLowerCase().replace(/\s+/g, "");
-        const target = cleanSlug.replace(/^@/, "");
-        return s.id.toLowerCase() === target || pUrl === target || sName === target;
-      });
-
-      if (!cancelled && fallbackS) {
-        setDbUser(fallbackS);
-        return;
-      }
-
-      const fallbackC = fallbackClients.find((c) => {
-        const cOrg = (c.clientProfile?.organization || "").toLowerCase().replace(/\s+/g, "");
-        const cName = c.name.toLowerCase().replace(/\s+/g, "");
-        const target = cleanSlug.replace(/^@/, "");
-        return c.id.toLowerCase() === target || cOrg === target || cName === target;
-      });
-
       if (!cancelled) {
-        setDbUser(fallbackC || null);
+        setDbUser(null);
       }
     }
 
@@ -363,13 +342,11 @@ export default function PortfolioPage({ params }: { params: Promise<{ slug: stri
   // Products & Projects
   const studentProducts: Product[] = isOwnProfile
     ? []
-    : (profileUser as unknown as { products?: Product[] })?.products ||
-      fallbackProducts.filter((p) => p.sellerId === profileUser.id);
+    : (profileUser as unknown as { products?: Product[] })?.products || [];
 
   const studentProjects: Project[] = isOwnProfile
     ? userProjects
-    : (profileUser as unknown as { ownedProjects?: Project[] })?.ownedProjects ||
-      fallbackProjects.filter((p) => p.ownerId === profileUser.id);
+    : (profileUser as unknown as { ownedProjects?: Project[] })?.ownedProjects || [];
 
   const stats = isOwnProfile
     ? {
@@ -496,7 +473,7 @@ export default function PortfolioPage({ params }: { params: Promise<{ slug: stri
                     </div>
                     <p className="text-xs text-[var(--muted-foreground)] line-clamp-2">{product.description}</p>
                     <div className="flex flex-wrap gap-1">
-                      {product.technologies.slice(0, 3).map((t) => (
+                      {(product.technologies || []).slice(0, 3).map((t) => (
                         <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>
                       ))}
                     </div>

@@ -1,36 +1,64 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search, ShieldCheck, Ban, MoreHorizontal, Filter } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Search, ShieldCheck, Ban, Filter, CheckCircle2, UserX, Check } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { students } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
+import type { User } from "@/types";
 
 export default function AdminUsersPage() {
+  const [userList, setUserList] = useState<User[]>([]);
   const [search, setSearch] = useState("");
-  const allUsers = students;
-  const filtered = allUsers.filter(
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const handleVerifyUser = (userId: string) => {
+    setUserList((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, isVerified: true } : u))
+    );
+    setActionNotice("Student developer verified successfully!");
+    setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  const handleToggleSuspend = (userId: string) => {
+    setUserList((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          const nextState = !u.isVerified;
+          return { ...u, isVerified: nextState };
+        }
+        return u;
+      })
+    );
+    setActionNotice("User status updated.");
+    setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  const filtered = userList.filter(
     (u) => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold mb-1">User Management</h1>
-        <p className="text-[var(--muted-foreground)] mb-6">Manage all registered users</p>
+        <h1 className="text-2xl font-bold mb-1">User Management & Verification</h1>
+        <p className="text-[var(--muted-foreground)]">Verify student credentials, manage developer profiles, and moderate accounts</p>
       </motion.div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted-foreground)]" />
-          <Input placeholder="Search users..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+      {actionNotice && (
+        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs flex items-center gap-2">
+          <Check className="h-4 w-4" /> {actionNotice}
         </div>
-        <Button variant="outline"><Filter className="h-4 w-4" /> Filters</Button>
+      )}
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted-foreground)]" />
+        <Input placeholder="Search users by name or email..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <Card>
@@ -38,43 +66,64 @@ export default function AdminUsersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--muted)]/30">
-                  <th className="py-3 px-4 text-left font-medium text-[var(--muted-foreground)]">User</th>
-                  <th className="py-3 px-4 text-left font-medium text-[var(--muted-foreground)]">Role</th>
-                  <th className="py-3 px-4 text-left font-medium text-[var(--muted-foreground)]">Status</th>
-                  <th className="py-3 px-4 text-left font-medium text-[var(--muted-foreground)]">College</th>
-                  <th className="py-3 px-4 text-left font-medium text-[var(--muted-foreground)]">Joined</th>
-                  <th className="py-3 px-4 text-right font-medium text-[var(--muted-foreground)]">Actions</th>
+                <tr className="border-b border-[var(--border)] bg-[var(--muted)]/30 text-xs text-[var(--muted-foreground)]">
+                  <th className="py-3 px-4 text-left font-semibold">User</th>
+                  <th className="py-3 px-4 text-left font-semibold">Role</th>
+                  <th className="py-3 px-4 text-left font-semibold">Verification</th>
+                  <th className="py-3 px-4 text-left font-semibold">College / Org</th>
+                  <th className="py-3 px-4 text-left font-semibold">Joined</th>
+                  <th className="py-3 px-4 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[var(--border)]">
                 {filtered.map((user) => (
-                  <tr key={user.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--muted)]/30 transition-colors">
+                  <tr key={user.id} className="hover:bg-[var(--muted)]/30 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <Avatar name={user.name} size="sm" />
                         <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-xs text-[var(--muted-foreground)]">{user.email}</p>
+                          <p className="font-semibold text-xs text-[var(--foreground)]">{user.name}</p>
+                          <p className="text-[11px] text-[var(--muted-foreground)]">{user.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <Badge variant="secondary" className="capitalize">{user.role}</Badge>
+                      <Badge variant="secondary" className="capitalize text-[10px]">{user.role}</Badge>
                     </td>
                     <td className="py-3 px-4">
                       {user.isVerified ? (
-                        <Badge variant="success"><ShieldCheck className="h-3 w-3 mr-1" />Verified</Badge>
+                        <Badge variant="success" className="text-[10px]"><ShieldCheck className="h-3 w-3 mr-1" />Verified</Badge>
                       ) : (
-                        <Badge variant="warning">Pending</Badge>
+                        <Badge variant="warning" className="text-[10px]">Pending Verification</Badge>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-[var(--muted-foreground)]">{user.studentProfile?.college || "—"}</td>
-                    <td className="py-3 px-4 text-[var(--muted-foreground)]">{formatDate(user.createdAt)}</td>
+                    <td className="py-3 px-4 text-xs text-[var(--muted-foreground)]">{user.studentProfile?.college || "—"}</td>
+                    <td className="py-3 px-4 text-xs text-[var(--muted-foreground)]">{formatDate(user.createdAt)}</td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center gap-1 justify-end">
-                        {!user.isVerified && <Button variant="outline" size="sm">Verify</Button>}
-                        <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600"><Ban className="h-3.5 w-3.5" /></Button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <Link href={`/portfolio/${user.studentProfile?.portfolioUrl || user.id}`}>
+                          <Button variant="ghost" size="sm" className="text-xs h-7">View</Button>
+                        </Link>
+                        {!user.isVerified ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleVerifyUser(user.id)}
+                            className="text-xs h-7 text-emerald-600 border-emerald-300 dark:border-emerald-900/50 hover:bg-emerald-50 cursor-pointer"
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" /> Verify Badge
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleSuspend(user.id)}
+                            className="text-xs h-7 text-red-500 hover:bg-red-50 cursor-pointer"
+                            title="Toggle suspension"
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-1" /> Revoke
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

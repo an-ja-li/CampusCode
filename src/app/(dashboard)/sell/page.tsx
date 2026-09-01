@@ -8,6 +8,7 @@ import {
   ArrowRight, ArrowLeft, CheckCircle2, Upload, Code2,
   FileText, Image as ImageIcon, DollarSign, Eye, Rocket,
   Loader2, X, AlertCircle, FileArchive, Check, ExternalLink,
+  Sparkles, Cloud, Globe,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,9 +70,10 @@ function SellFormContent() {
   const [dragActiveImages, setDragActiveImages] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  // Step 4: Files
+  // Step 4: Files & Source Code Links
   const [sourceCodePackage, setSourceCodePackage] = useState<{ name: string; size: number } | null>(null);
   const [githubUrl, setGithubUrl] = useState("");
+  const [driveUrl, setDriveUrl] = useState("");
   const [documentation, setDocumentation] = useState("");
   const [requirements, setRequirements] = useState("");
   const [dragActiveFiles, setDragActiveFiles] = useState(false);
@@ -84,6 +86,8 @@ function SellFormContent() {
 
   // Step 7: Publishing state
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isAiOptimizing, setIsAiOptimizing] = useState(false);
+  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
   const [publishedSuccess, setPublishedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
@@ -96,11 +100,48 @@ function SellFormContent() {
     const pCat = searchParams.get("category");
     const pTech = searchParams.get("tech");
 
-    if (pId) setProjectId(pId);
+    if (pId) {
+      setProjectId(pId);
+
+      // Check attached source package in local storage
+      try {
+        const savedSource = localStorage.getItem(`campuscode_source_${pId}`);
+        if (savedSource) {
+          const pkg = JSON.parse(savedSource);
+          if (pkg.name) setSourceCodePackage({ name: pkg.name, size: pkg.size || 24000000 });
+          if (pkg.driveUrl) setDriveUrl(pkg.driveUrl);
+        }
+      } catch {}
+
+      // Fetch full project from database to pre-populate everything
+      fetch(`/api/projects/${pId}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((proj) => {
+          if (proj && !proj.error) {
+            if (proj.name) setName(proj.name);
+            if (proj.description) {
+              setDescription(proj.description);
+              setShortDescription(proj.description.slice(0, 120));
+            }
+            if (proj.category) setCategory(proj.category.toLowerCase().replace(/\s+/g, "-"));
+            if (proj.technologies && proj.technologies.length > 0) setSelectedTech(proj.technologies);
+            if (proj.githubRepo) {
+              const fullGh = proj.githubRepo.startsWith("http")
+                ? proj.githubRepo
+                : `https://github.com/${proj.githubRepo}`;
+              setGithubUrl(fullGh);
+            }
+            setDocumentation(`## Setup & Quick Start Guide\n\n1. Extract codebase or clone from GitHub.\n2. Install dependencies:\n   \`\`\`bash\n   npm install\n   \`\`\`\n3. Configure environment variables in \`.env.local\`.\n4. Start development server:\n   \`\`\`bash\n   npm run dev\n   \`\`\`\n5. Open \`http://localhost:3000\` in your browser.`);
+            setRequirements("Node.js 18.0 or higher\nnpm, yarn, or pnpm\nModern browser (Chrome/Edge/Firefox)");
+          }
+        })
+        .catch(() => {});
+    }
+
     if (pName) setName(pName);
     if (pDesc) {
       setDescription(pDesc);
-      setShortDescription(pDesc.slice(0, 100));
+      setShortDescription(pDesc.slice(0, 120));
     }
     if (pCat) setCategory(pCat.toLowerCase().replace(/\s+/g, "-"));
     if (pTech) {
@@ -113,6 +154,51 @@ function SellFormContent() {
     setSelectedTech((prev) =>
       prev.includes(tech) ? prev.filter((t) => t !== tech) : [...prev, tech]
     );
+  };
+
+  // AI Listing Optimizer
+  const handleAiOptimize = async () => {
+    if (!name.trim() && !description.trim()) {
+      setStepErrors((prev) => ({ ...prev, name: "Enter at least a name or draft description first." }));
+      return;
+    }
+
+    setIsAiOptimizing(true);
+    setAiSuccessMessage(null);
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "optimize_listing",
+          title: name.trim(),
+          description: description.trim() || shortDescription.trim(),
+          technologies: selectedTech,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.optimization) {
+          if (data.optimization.title && !name.trim()) setName(data.optimization.title);
+          if (data.optimization.description) {
+            setDescription(data.optimization.description);
+            if (!shortDescription.trim()) {
+              setShortDescription(data.optimization.description.slice(0, 110) + "...");
+            }
+          }
+          if (data.optimization.tags && data.optimization.tags.length > 0 && !tags.trim()) {
+            setTags(data.optimization.tags.join(", "));
+          }
+          setAiSuccessMessage("✨ Listing enhanced by CampusCode AI!");
+          setTimeout(() => setAiSuccessMessage(null), 4000);
+        }
+      }
+    } catch (err) {
+      console.error("AI Optimization failed:", err);
+    } finally {
+      setIsAiOptimizing(false);
+    }
   };
 
   // Image Upload Handlers
@@ -179,8 +265,8 @@ function SellFormContent() {
     } else if (currentStep === 3) {
       if (screenshots.length === 0) errors.media = "Please upload at least 1 project screenshot.";
     } else if (currentStep === 4) {
-      if (!sourceCodePackage && !githubUrl.trim()) {
-        errors.files = "Please upload a source code archive or provide a GitHub repository URL.";
+      if (!sourceCodePackage && !githubUrl.trim() && !driveUrl.trim()) {
+        errors.files = "Please provide a Google Drive link, GitHub repository, or upload a source code archive.";
       }
       if (!documentation.trim()) {
         errors.documentation = "Please provide setup, installation, or usage documentation.";
@@ -234,6 +320,7 @@ function SellFormContent() {
         screenshots: screenshots.map((s) => s.dataUrl),
         demoUrl: demoUrl.trim() || undefined,
         githubUrl: githubUrl.trim() || undefined,
+        driveUrl: driveUrl.trim() || undefined,
         documentation: documentation.trim() || undefined,
         requirements: requirements ? requirements.split("\n").map((r) => r.trim()).filter(Boolean) : [],
         projectId: projectId || undefined,
@@ -329,8 +416,32 @@ function SellFormContent() {
       {step === 1 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>Basic Information</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle>Basic Information</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAiOptimize}
+                disabled={isAiOptimizing}
+                className="gap-1.5 text-xs text-[var(--primary)] border-[var(--primary)]/30 hover:bg-[var(--primary)]/10 cursor-pointer"
+              >
+                {isAiOptimizing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--primary)]" />
+                )}
+                <span>{isAiOptimizing ? "Enhancing..." : "AI Auto-Enhance"}</span>
+              </Button>
+            </CardHeader>
             <CardContent className="space-y-4">
+              {aiSuccessMessage && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 shrink-0" />
+                  <span>{aiSuccessMessage}</span>
+                </div>
+              )}
+
               <div>
                 <Label className="mb-1.5 block">
                   Product Name <span className="text-red-500 font-bold">*</span>
@@ -615,14 +726,68 @@ function SellFormContent() {
       {step === 4 && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card>
-            <CardHeader><CardTitle>Files & Documentation</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
+            <CardHeader>
+              <CardTitle>Files & Source Code Access</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 text-xs text-blue-800 dark:text-blue-200 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <Cloud className="h-4 w-4 text-blue-500" />
+                  Instant Download & Access Guarantee
+                </p>
+                <p className="opacity-90">
+                  When a client purchases your software, they will immediately receive a direct download link and repository access. Please provide your Google Drive folder link, GitHub repository, or upload the source archive below.
+                </p>
+              </div>
+
+              {/* Google Drive Link */}
+              <div className="space-y-1.5 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]/50">
+                <div className="flex items-center justify-between">
+                  <Label className="font-semibold flex items-center gap-1.5 text-sm">
+                    <Cloud className="h-4 w-4 text-[var(--primary)]" />
+                    Google Drive Folder / Download Link
+                  </Label>
+                  <span className="text-[11px] text-[var(--muted-foreground)]">Recommended for instant zip downloads</span>
+                </div>
+                <Input
+                  placeholder="https://drive.google.com/drive/folders/... or direct link"
+                  value={driveUrl}
+                  onChange={(e) => {
+                    setDriveUrl(e.target.value);
+                    if (stepErrors.files) setStepErrors((prev) => ({ ...prev, files: "" }));
+                  }}
+                  className={stepErrors.files && !githubUrl && !sourceCodePackage ? "border-red-500 ring-1 ring-red-500" : ""}
+                />
+                <p className="text-[11px] text-[var(--muted-foreground)]">
+                  Tip: Ensure sharing settings are set to &quot;Anyone with the link can view/download&quot;.
+                </p>
+              </div>
+
+              {/* GitHub Repository */}
+              <div className="space-y-1.5 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]/50">
+                <Label className="font-semibold flex items-center gap-1.5 text-sm">
+                  <Code2 className="h-4 w-4 text-[var(--primary)]" />
+                  GitHub Repository URL
+                </Label>
+                <Input
+                  placeholder="https://github.com/your-username/your-repository"
+                  value={githubUrl}
+                  onChange={(e) => {
+                    setGithubUrl(e.target.value);
+                    if (stepErrors.files) setStepErrors((prev) => ({ ...prev, files: "" }));
+                  }}
+                />
+                <p className="text-[11px] text-[var(--muted-foreground)]">
+                  Public repo link or repository invitation target for automated access grant.
+                </p>
+              </div>
+
+              {/* Archive Upload */}
               <div>
-                <Label className="mb-2 block">
-                  Source Code Package or GitHub Repo <span className="text-red-500 font-bold">*</span>
+                <Label className="mb-2 block font-semibold text-sm">
+                  Or Upload Source Code Archive (.zip / .tar.gz)
                 </Label>
                 
-                {/* Archive Upload */}
                 <div
                   onDragOver={(e) => { e.preventDefault(); setDragActiveFiles(true); }}
                   onDragLeave={(e) => { e.preventDefault(); setDragActiveFiles(false); }}
@@ -632,18 +797,15 @@ function SellFormContent() {
                     handleArchiveFile(e.dataTransfer.files);
                   }}
                   onClick={() => fileArchiveInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                  className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
                     dragActiveFiles
                       ? "border-[var(--primary)] bg-[var(--primary)]/10"
                       : "border-[var(--border)] hover:border-[var(--primary)]/50 hover:bg-[var(--muted)]/30"
                   }`}
                 >
-                  <FileArchive className="h-8 w-8 mx-auto text-[var(--muted-foreground)]/60 mb-2" />
-                  <p className="text-sm font-semibold mb-1">Source Code Archive (.zip / .tar.gz)</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">Upload complete source code package or specify repository link below</p>
-                  <Button type="button" variant="outline" size="sm" className="mt-3 pointer-events-none">
-                    <Upload className="h-3.5 w-3.5 mr-1.5" /> Choose Archive File
-                  </Button>
+                  <FileArchive className="h-7 w-7 mx-auto text-[var(--muted-foreground)]/60 mb-1.5" />
+                  <p className="text-xs font-semibold mb-0.5">Attach Local .zip / .tar.gz Bundle</p>
+                  <p className="text-[11px] text-[var(--muted-foreground)]">Click to browse or drop source package here</p>
                   <input
                     ref={fileArchiveInputRef}
                     type="file"
@@ -669,25 +831,11 @@ function SellFormContent() {
                     </button>
                   </div>
                 )}
-                {stepErrors.files && <p className="text-xs text-red-500 mt-1">{stepErrors.files}</p>}
+                {stepErrors.files && <p className="text-xs text-red-500 mt-1.5">{stepErrors.files}</p>}
               </div>
 
               <div>
-                <Label className="mb-1.5 block">
-                  GitHub Repository (optional if archive is attached)
-                </Label>
-                <Input
-                  placeholder="https://github.com/username/project-repo"
-                  value={githubUrl}
-                  onChange={(e) => {
-                    setGithubUrl(e.target.value);
-                    if (stepErrors.files) setStepErrors((prev) => ({ ...prev, files: "" }));
-                  }}
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block">
+                <Label className="mb-1.5 block font-semibold text-sm">
                   Documentation & Setup Guide <span className="text-red-500 font-bold">*</span>
                 </Label>
                 <Textarea
@@ -889,6 +1037,30 @@ function SellFormContent() {
                 <p className="text-sm text-[var(--foreground)] whitespace-pre-line leading-relaxed">
                   {description}
                 </p>
+              </div>
+
+              {/* Source Delivery Preview */}
+              <div className="p-4 rounded-xl bg-blue-50/40 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-900/30 text-xs space-y-1.5">
+                <p className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                  <Cloud className="h-4 w-4" /> Instant Delivery on Purchase
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {driveUrl && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Cloud className="h-3 w-3 text-blue-500" /> Google Drive Link Attached
+                    </Badge>
+                  )}
+                  {githubUrl && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Code2 className="h-3 w-3 text-[var(--primary)]" /> GitHub Repo Link Attached
+                    </Badge>
+                  )}
+                  {sourceCodePackage && (
+                    <Badge variant="secondary" className="gap-1">
+                      <FileArchive className="h-3 w-3 text-amber-500" /> Zip Archive ({formatBytes(sourceCodePackage.size)})
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               {/* Pricing & License row */}

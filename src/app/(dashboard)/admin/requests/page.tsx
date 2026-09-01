@@ -1,14 +1,23 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Eye, CheckCircle2, XCircle, Clock, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { solutionRequests } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import type { SolutionRequest } from "@/types";
 
 export default function AdminRequestsPage() {
+  const [solutionRequests, setSolutionRequests] = useState<SolutionRequest[]>([]);
+
+  useEffect(() => {
+    fetch('/api/solutions')
+      .then((res) => res.json())
+      .then((data) => setSolutionRequests(data.requests || []))
+      .catch(() => setSolutionRequests([]));
+  }, []);
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>

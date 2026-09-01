@@ -190,6 +190,9 @@ export interface Product {
   includes: string[];
   qualityScore: QualityScore;
   githubRepo?: string;
+  githubUrl?: string;
+  driveUrl?: string;
+  downloadUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

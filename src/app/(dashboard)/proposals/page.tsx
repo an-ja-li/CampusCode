@@ -72,7 +72,7 @@ export default function ProposalsPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-1.5 mt-3">
-                        {proposal.technologies.slice(0, 4).map((tech) => (
+                        {(proposal.technologies || []).slice(0, 4).map((tech) => (
                           <Badge key={tech} variant="secondary" className="text-xs">{tech}</Badge>
                         ))}
                       </div>

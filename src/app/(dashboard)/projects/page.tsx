@@ -102,7 +102,7 @@ export default function ProjectsPage() {
                     <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mb-3">{project.description || "No description provided."}</p>
 
                     <div className="flex flex-wrap gap-1.5 mb-4">
-                      {project.technologies.slice(0, 3).map((tech) => (
+                      {(project.technologies || []).slice(0, 3).map((tech) => (
                         <Badge key={tech} variant="secondary" className="text-xs">{tech}</Badge>
                       ))}
                     </div>

@@ -5,10 +5,11 @@ import { Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { reviews } from "@/lib/mock-data";
 import { formatRelativeTime } from "@/lib/utils";
+import type { Review } from "@/types";
 
 export default function ReviewsPage() {
+  const reviews: Review[] = [];
   const avgRating = reviews.length ? (reviews.reduce((s, r) => s + r.overall, 0) / reviews.length).toFixed(1) : "0";
 
   return (

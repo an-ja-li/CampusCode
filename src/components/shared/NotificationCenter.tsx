@@ -17,9 +17,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { notifications as mockNotifications } from "@/lib/mock-data";
 import { formatRelativeTime } from "@/lib/utils";
-import type { NotificationType } from "@/types";
+import type { Notification, NotificationType } from "@/types";
 
 const typeIcons: Record<NotificationType, React.ComponentType<{ className?: string }>> = {
   proposal: FileText,
@@ -49,7 +48,7 @@ interface NotificationCenterProps {
 }
 
 export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const markRead = (id: string) => {

@@ -4,7 +4,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { notifications as mockNotifications } from '@/lib/mock-data';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,25 +24,16 @@ export async function GET(request: NextRequest) {
         where: { userId, isRead: false },
       });
 
-      if (dbNotifications && dbNotifications.length > 0) {
-        return NextResponse.json({
-          notifications: dbNotifications,
-          unreadCount,
-        });
-      }
+      return NextResponse.json({
+        notifications: dbNotifications || [],
+        unreadCount,
+      });
     } catch {
-      // Fallback
+      return NextResponse.json({
+        notifications: [],
+        unreadCount: 0,
+      });
     }
-
-    let filtered = mockNotifications.filter((n) => n.userId === userId);
-    if (unreadOnly) {
-      filtered = filtered.filter((n) => !n.isRead);
-    }
-
-    return NextResponse.json({
-      notifications: filtered,
-      unreadCount: filtered.filter((n) => !n.isRead).length,
-    });
   } catch (error) {
     console.error('[API Notifications Error]:', error);
     return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });

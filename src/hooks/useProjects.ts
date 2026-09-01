@@ -6,10 +6,9 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import type { Project, Task, TaskStatus, TaskPriority } from '@/types';
-import { projects, projectTasks } from '@/lib/mock-data';
 
 export function useProjects() {
-  const [allProjects] = useState<Project[]>(projects);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [filter, setFilter] = useState<string>('all');
 
   const filteredProjects = useMemo(() => {
@@ -23,6 +22,7 @@ export function useProjects() {
 
   return {
     projects: filteredProjects,
+    setProjects: setAllProjects,
     filter,
     setFilter,
     getProjectById,
@@ -30,9 +30,7 @@ export function useProjects() {
 }
 
 export function useProjectTasks(projectId: string) {
-  const [tasks, setTasks] = useState<Task[]>(
-    projectId === 'proj1' ? projectTasks : []
-  );
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const moveTask = useCallback((taskId: string, newStatus: TaskStatus) => {
     setTasks((prev) =>

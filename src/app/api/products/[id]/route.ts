@@ -13,24 +13,29 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const product = await db.product.findFirst({
-      where: {
-        OR: [
-          { id },
-          { slug: id },
-        ],
-      },
-      include: {
-        seller: {
-          include: {
-            studentProfile: {
-              include: { badges: true },
+    let product = null;
+    try {
+      product = await db.product.findFirst({
+        where: {
+          OR: [
+            { id },
+            { slug: id },
+          ],
+        },
+        include: {
+          seller: {
+            include: {
+              studentProfile: {
+                include: { badges: true },
+              },
             },
           },
+          reviews: true,
         },
-        reviews: true,
-      },
-    });
+      });
+    } catch (dbErr) {
+      console.warn('[API Product Detail DB Warning]:', dbErr);
+    }
 
     if (!product) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });

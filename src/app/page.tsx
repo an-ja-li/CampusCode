@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -14,8 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { products, students, solutionRequests, platformStats } from "@/lib/mock-data";
 import { formatCurrency, formatCompactNumber } from "@/lib/utils";
+import type { Product, SolutionRequest, User } from "@/types";
 
 const fadeUp = {
   initial: { opacity: 0, y: 24 },
@@ -31,6 +32,21 @@ const stagger = {
 };
 
 export default function LandingPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [solutionRequests, setSolutionRequests] = useState<SolutionRequest[]>([]);
+  const [students, setStudents] = useState<User[]>([]);
+
+  useEffect(() => {
+    fetch('/api/products')
+      .then((res) => res.json())
+      .then((data) => setProducts(data.products || []))
+      .catch(() => setProducts([]));
+
+    fetch('/api/solution-requests')
+      .then((res) => res.json())
+      .then((data) => setSolutionRequests(data.requests || []))
+      .catch(() => setSolutionRequests([]));
+  }, []);
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -261,7 +277,7 @@ export default function LandingPage() {
                       </p>
 
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {product.technologies.slice(0, 3).map((tech) => (
+                        {(product.technologies || []).slice(0, 3).map((tech) => (
                           <Badge key={tech} variant="secondary" className="text-xs">{tech}</Badge>
                         ))}
                       </div>

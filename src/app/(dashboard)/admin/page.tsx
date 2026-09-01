@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Users, Package, Lightbulb, DollarSign, TrendingUp,
@@ -9,12 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { platformStats, students, products } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/utils";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
 } from "recharts";
+import type { User, Product } from "@/types";
 
 const monthlyData = [
   { month: "Jan", users: 120, products: 15, revenue: 45000 },
@@ -26,6 +27,16 @@ const monthlyData = [
 ];
 
 export default function AdminDashboardPage() {
+  const [students] = useState<User[]>([]);
+  const [products] = useState<Product[]>([]);
+  const platformStats = {
+    totalStudents: 0,
+    totalProducts: 0,
+    solutionsBuilt: 0,
+    totalEarnings: 0,
+    totalProjects: 0,
+    activeContracts: 0,
+  };
   const stats = [
     { label: "Total Students", value: platformStats.totalStudents, icon: Users, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30", change: "+12%" },
     { label: "Total Products", value: platformStats.totalProducts, icon: Package, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30", change: "+8%" },

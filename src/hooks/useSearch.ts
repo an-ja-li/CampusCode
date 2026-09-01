@@ -4,8 +4,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
-import { products, solutionRequests, students, projects } from '@/lib/mock-data';
+import { useState, useCallback, useEffect } from 'react';
 
 export interface SearchResult {
   id: string;
@@ -18,69 +17,37 @@ export interface SearchResult {
 export function useSearch() {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [results, setResults] = useState<SearchResult[]>([]);
 
-  const results = useMemo<SearchResult[]>(() => {
-    if (!query || query.length < 2) return [];
-    const q = query.toLowerCase();
-    const matches: SearchResult[] = [];
+  useEffect(() => {
+    if (!query || query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
 
-    // Search products
-    products.forEach((p) => {
-      if (p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) {
-        matches.push({
-          id: p.id,
-          type: 'product',
-          title: p.name,
-          subtitle: `${p.category} • ${p.isFree ? 'Free' : `₹${p.price}`}`,
-          url: `/marketplace/${p.id}`,
-        });
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) {
+            setResults(data.results || []);
+          }
+        }
+      } catch (err) {
+        console.error('[useSearch] Error:', err);
       }
-    });
+    }, 200);
 
-    // Search solution requests
-    solutionRequests.forEach((sr) => {
-      if (sr.title.toLowerCase().includes(q) || sr.description.toLowerCase().includes(q)) {
-        matches.push({
-          id: sr.id,
-          type: 'solution',
-          title: sr.title,
-          subtitle: `${sr.category} • ${sr.proposalCount} proposals`,
-          url: `/solutions/${sr.id}`,
-        });
-      }
-    });
-
-    // Search students
-    students.forEach((s) => {
-      if (s.name.toLowerCase().includes(q) || s.studentProfile?.skills.some((sk) => sk.toLowerCase().includes(q))) {
-        matches.push({
-          id: s.id,
-          type: 'student',
-          title: s.name,
-          subtitle: s.studentProfile?.college || s.role,
-          url: `/portfolio/${s.studentProfile?.portfolioUrl || s.id}`,
-        });
-      }
-    });
-
-    // Search projects
-    projects.forEach((p) => {
-      if (p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) {
-        matches.push({
-          id: p.id,
-          type: 'project',
-          title: p.name,
-          subtitle: `${p.status} • ${p.progress}%`,
-          url: `/projects/${p.id}`,
-        });
-      }
-    });
-
-    return matches.slice(0, 10);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => { setIsOpen(false); setQuery(''); }, []);
+  const close = useCallback(() => { setIsOpen(false); setQuery(''); setResults([]); }, []);
 
   return {
     query,
@@ -91,3 +58,4 @@ export function useSearch() {
     close,
   };
 }
+

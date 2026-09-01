@@ -27,6 +27,11 @@ export default function MarketplacePage() {
   useEffect(() => {
     let cancelled = false;
 
+    // Clear any stale local cached products
+    try {
+      localStorage.removeItem('campuscode_published_products');
+    } catch {}
+
     async function loadProducts() {
       try {
         const queryParams = new URLSearchParams();
@@ -37,11 +42,14 @@ export default function MarketplacePage() {
         queryParams.set("sort", sortBy);
 
         const res = await fetch(`/api/products?${queryParams.toString()}`);
+        let apiProducts: Product[] = [];
         if (res.ok) {
           const data = await res.json();
-          if (!cancelled) {
-            setProductList(data.products || []);
-          }
+          apiProducts = data.products || [];
+        }
+
+        if (!cancelled) {
+          setProductList(apiProducts);
         }
       } catch (err) {
         console.error("[Marketplace] Error fetching products:", err);
@@ -58,13 +66,21 @@ export default function MarketplacePage() {
   }, [search, selectedCategory, priceFilter, sortBy]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold mb-1">Software Marketplace</h1>
-        <p className="text-[var(--muted-foreground)] mb-6">
-          Discover and purchase software built by verified student developers
-        </p>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Software Marketplace</h1>
+          <p className="text-[var(--muted-foreground)]">
+            Discover and purchase software built by verified student developers
+          </p>
+        </div>
+
+        <Link href="/sell">
+          <Button size="sm" className="gap-1.5 bg-gradient-to-r from-[var(--primary)] to-emerald-600 hover:opacity-90 text-white shadow-md text-xs cursor-pointer">
+            + Publish Your Software
+          </Button>
+        </Link>
       </motion.div>
 
       {/* Search and Filters */}
@@ -73,7 +89,7 @@ export default function MarketplacePage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted-foreground)]" />
             <Input
-              placeholder="Search products..."
+              placeholder="Search products, technologies, or keywords..."
               className="pl-10"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -94,9 +110,9 @@ export default function MarketplacePage() {
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
             >
+              <option value="newest">Newest First</option>
               <option value="popular">Most Popular</option>
               <option value="rating">Highest Rated</option>
-              <option value="newest">Newest</option>
               <option value="price_low">Price: Low to High</option>
               <option value="price_high">Price: High to Low</option>
             </select>
@@ -104,7 +120,7 @@ export default function MarketplacePage() {
         </div>
 
         {/* Category Pills */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-6">
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
           <button
             onClick={() => setSelectedCategory("all")}
             className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
@@ -115,19 +131,23 @@ export default function MarketplacePage() {
           >
             All Products
           </button>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
-                selectedCategory === cat.id
-                  ? "bg-[var(--primary)] text-white"
-                  : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/80"
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
+          {CATEGORIES.map((cat: any) => {
+            const catKey = cat.slug || cat.id;
+            const isSelected = selectedCategory === catKey || selectedCategory === cat.id || selectedCategory === cat.slug;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(catKey)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
+                  isSelected
+                    ? "bg-[var(--primary)] text-white"
+                    : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/80"
+                }`}
+              >
+                {cat.name}
+              </button>
+            );
+          })}
         </div>
       </motion.div>
 
@@ -170,7 +190,7 @@ export default function MarketplacePage() {
                           {product.name}
                         </h3>
                         <span className="font-bold text-sm shrink-0">
-                          {product.isFree ? (
+                          {product.isFree || product.price === 0 || Number(product.price) === 0 ? (
                             <Badge variant="success">Free</Badge>
                           ) : (
                             formatCurrency(product.price)
@@ -187,14 +207,14 @@ export default function MarketplacePage() {
                     <div>
                       {/* Technologies */}
                       <div className="flex flex-wrap gap-1.5 mb-4">
-                        {product.technologies.slice(0, 3).map((tech) => (
+                        {(product.technologies || []).slice(0, 3).map((tech) => (
                           <Badge key={tech} variant="secondary" className="text-xs font-normal">
                             {tech}
                           </Badge>
                         ))}
-                        {product.technologies.length > 3 && (
+                        {(product.technologies || []).length > 3 && (
                           <span className="text-xs text-[var(--muted-foreground)] self-center">
-                            +{product.technologies.length - 3}
+                            +{(product.technologies || []).length - 3}
                           </span>
                         )}
                       </div>
@@ -203,10 +223,10 @@ export default function MarketplacePage() {
                       <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)] pt-3 border-t border-[var(--border)]">
                         <div className="flex items-center gap-1">
                           <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                          <span className="font-medium">{product.rating}</span>
-                          <span>({product.reviewCount})</span>
+                          <span className="font-medium">{product.rating ?? 5.0}</span>
+                          <span>({product.reviewCount ?? 0})</span>
                         </div>
-                        <span>{product.salesCount.toLocaleString()} sales</span>
+                        <span>{(product.salesCount ?? 0).toLocaleString()} sales</span>
                       </div>
                     </div>
                   </CardContent>

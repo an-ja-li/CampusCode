@@ -6,10 +6,9 @@
 
 import { useState, useCallback } from 'react';
 import type { Notification } from '@/types';
-import { notifications as mockNotifications } from '@/lib/mock-data';
 
 export function useNotifications() {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 

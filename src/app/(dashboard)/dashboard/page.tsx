@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -11,12 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { solutionRequests, aiMatchScores, products as fallbackProducts } from "@/lib/mock-data";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserData } from "@/lib/user-store";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import type { Product, SolutionRequest } from "@/types";
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -26,10 +27,23 @@ const fadeUp = {
 export default function DashboardPage() {
   const { user, isAuthenticated } = useAuth();
   const { projects, isLoaded, stats } = useUserData();
+  const [solutionRequests, setSolutionRequests] = useState<SolutionRequest[]>([]);
+  const [productsList, setProductsList] = useState<Product[]>([]);
+
+  useEffect(() => {
+    fetch('/api/solutions')
+      .then((res) => res.json())
+      .then((data) => setSolutionRequests(data.requests || []))
+      .catch(() => setSolutionRequests([]));
+
+    fetch('/api/products')
+      .then((res) => res.json())
+      .then((data) => setProductsList(data.products || []))
+      .catch(() => setProductsList([]));
+  }, []);
 
   const role = (user?.role || "student").toLowerCase();
   const isClient = role === "client";
-  const isStudent = !isClient;
 
   const userFirstName = isAuthenticated && user?.name ? user.name.split(" ")[0] : null;
   const activeProjects = projects.filter((p) => {
@@ -49,12 +63,10 @@ export default function DashboardPage() {
 
   // ── Client Stats ──
   const clientStats = [
-    { label: "Posted Requirements", value: stats.activeProjectsCount, icon: Lightbulb, color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30" },
-    { label: "Active Contracts", value: stats.activeContractsCount, icon: FileCheck, color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30" },
+    { label: "Open Requests", value: solutionRequests.length, icon: Lightbulb, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" },
+    { label: "Active Contracts", value: stats.activeContractsCount, icon: FileCheck, color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30" },
     { label: "Proposals Received", value: stats.proposalsCount, icon: Send, color: "text-purple-500 bg-purple-100 dark:bg-purple-900/30" },
-    { label: "Purchases", value: stats.totalSales, icon: ShoppingBag, color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" },
-    { label: "Total Spent", value: formatCurrency(stats.totalEarnings), icon: DollarSign, color: "text-cyan-500 bg-cyan-100 dark:bg-cyan-900/30", isString: true },
-    { label: "Developers Hired", value: stats.activeContractsCount, icon: Users, color: "text-rose-500 bg-rose-100 dark:bg-rose-900/30" },
+    { label: "Total Spent", value: formatCurrency(stats.totalEarnings), icon: DollarSign, color: "text-rose-500 bg-rose-100 dark:bg-rose-900/30", isString: true },
   ];
 
   const dashboardStats = isClient ? clientStats : studentStats;
@@ -89,26 +101,26 @@ export default function DashboardPage() {
     { month: "Aug", earnings: stats.totalEarnings },
   ];
 
-  const userSkills = user?.studentProfile?.skills || ["React", "TypeScript", "Next.js"];
+  const userSkills: string[] = user?.studentProfile?.skills || ["React", "TypeScript", "Next.js"];
 
   const matchedRequests = solutionRequests
-    .filter((sr) => sr.status === "open")
+    .filter((sr: SolutionRequest) => sr.status === "open")
     .slice(0, 3)
-    .map((sr) => {
-      const defaultScore = 85 + (sr.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 12);
-      const matchScore = aiMatchScores[sr.id]?.score || defaultScore;
-      const matchingSkills = sr.preferredTechnologies.filter((t) =>
-        userSkills.some((s) => s.toLowerCase() === t.toLowerCase())
+    .map((sr: SolutionRequest) => {
+      const matchScore = 85 + (sr.id.split("").reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0) % 12);
+      const preferred = sr.preferredTechnologies || [];
+      const matchingSkills = preferred.filter((t: string) =>
+        userSkills.some((s: string) => s.toLowerCase() === t.toLowerCase())
       );
       return {
         ...sr,
         matchScore,
-        matchingSkills: matchingSkills.length > 0 ? matchingSkills : sr.preferredTechnologies.slice(0, 2),
+        matchingSkills: matchingSkills.length > 0 ? matchingSkills : preferred.slice(0, 2),
       };
     });
 
   // Client featured products
-  const featuredProducts = fallbackProducts.slice(0, 3);
+  const featuredProducts = productsList.slice(0, 3);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -390,12 +402,12 @@ export default function DashboardPage() {
                         {product.description}
                       </p>
                       <div className="flex flex-wrap gap-1">
-                        {product.technologies.slice(0, 3).map((tech) => (
+                        {(product.technologies || []).slice(0, 3).map((tech) => (
                           <Badge key={tech} variant="secondary" className="text-[10px]">{tech}</Badge>
                         ))}
                         <div className="flex items-center gap-1 ml-auto">
                           <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          <span className="text-xs font-medium">{product.rating}</span>
+                          <span className="text-xs font-medium">{product.rating ?? 5.0}</span>
                         </div>
                       </div>
                     </div>

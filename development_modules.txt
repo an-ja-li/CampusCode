@@ -1,0 +1,47 @@
+================================================================================
+CAMPUSCODE - INITIAL DEVELOPMENT MODULES
+================================================================================
+
+MODULE 1: LANDING PAGE & CORE UI FOUNDATION
+--------------------------------------------------------------------------------
+- Create modern, responsive Landing Page (Hero section, platform features,
+  marketplace previews, live statistics, and CTA buttons).
+- Setup global design system, dark/light theme switching, and navigation layout
+  (Navbar, Footer, mobile drawer).
+- Deliverables: `/` (Landing Page), reusable UI components, theme provider.
+
+
+MODULE 2: ROLE-BASED AUTHENTICATION & PROFILE ONBOARDING
+--------------------------------------------------------------------------------
+- User registration and login (Email/Password, Google OAuth, GitHub OAuth).
+- Role selection during onboarding: Student Developer or Client/Organization.
+- Profile setup:
+  * Student: College details, skills, bio, social links, developer portfolio.
+  * Client: Company/organization info, website, verification details.
+- Deliverables: `/login`, `/register`, `/settings`, `/portfolio/[slug]`.
+
+
+MODULE 3: SOFTWARE MARKETPLACE & SELLING WIZARD
+--------------------------------------------------------------------------------
+- Marketplace catalog with keyword search, category filters, and sorting.
+- Product detail pages with live demo links, screenshots, features, and pricing.
+- Multi-step product upload wizard for students to list and sell projects/templates.
+- Deliverables: `/marketplace`, `/marketplace/[product]`, `/sell`.
+
+
+MODULE 4: SOLUTION REQUESTS & PROPOSAL BIDDING
+--------------------------------------------------------------------------------
+- Client requirement posting workflow (project description, budget, tech stack, deadline).
+- Opportunity feed for students to browse, filter, and discover open requests.
+- Proposal submission form for students to place bids with milestone timelines.
+- Deliverables: `/solutions`, `/solutions/post`, `/solutions/[id]`, `/proposals`.
+
+
+MODULE 5: USER DASHBOARD & PROJECT MANAGEMENT WORKSPACE
+--------------------------------------------------------------------------------
+- Role-specific dashboard overview with key metrics, active tasks, and earnings stats.
+- Project workspace featuring interactive Kanban boards (Todo, In Progress, Done).
+- Basic milestone tracking, direct client-student chat, and in-app notifications.
+- Deliverables: `/dashboard`, `/projects`, `/projects/[id]`, `/messages`.
+
+================================================================================

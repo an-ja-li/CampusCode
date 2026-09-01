@@ -262,6 +262,8 @@ model Product {
   license       String        @default("Commercial")
   demoUrl       String?
   githubUrl     String?
+  driveUrl      String?
+  downloadUrl   String?
   documentation String?
   installation  String?
   screenshots   String[]

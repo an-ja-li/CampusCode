@@ -4,7 +4,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { products as mockProducts, solutionRequests as mockRequests, students as mockStudents, projects as mockProjects } from '@/lib/mock-data';
 
 export async function GET(request: NextRequest) {
   try {
@@ -108,69 +107,8 @@ export async function GET(request: NextRequest) {
           });
         });
       }
-
-      if (results.length > 0) {
-        return NextResponse.json({ results: results.slice(0, 20), total: results.length });
-      }
-    } catch {
-      // Fallback
-    }
-
-    // Fallback when database is empty
-    if (!type || type === 'product') {
-      mockProducts.forEach((p) => {
-        if (p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query)) {
-          results.push({
-            id: p.id,
-            type: 'product',
-            title: p.name,
-            subtitle: `${p.category} • ${p.isFree ? 'Free' : `₹${p.price}`}`,
-            url: `/marketplace/${p.id}`,
-          });
-        }
-      });
-    }
-
-    if (!type || type === 'solution') {
-      mockRequests.forEach((sr) => {
-        if (sr.title.toLowerCase().includes(query) || sr.description.toLowerCase().includes(query)) {
-          results.push({
-            id: sr.id,
-            type: 'solution',
-            title: sr.title,
-            subtitle: `${sr.category} • ${sr.proposalCount} proposals`,
-            url: `/solutions/${sr.id}`,
-          });
-        }
-      });
-    }
-
-    if (!type || type === 'student') {
-      mockStudents.forEach((s) => {
-        if (s.name.toLowerCase().includes(query) || s.studentProfile?.skills.some((sk) => sk.toLowerCase().includes(query))) {
-          results.push({
-            id: s.id,
-            type: 'student',
-            title: s.name,
-            subtitle: s.studentProfile?.college || s.role,
-            url: `/portfolio/${s.studentProfile?.portfolioUrl || s.id}`,
-          });
-        }
-      });
-    }
-
-    if (!type || type === 'project') {
-      mockProjects.forEach((p) => {
-        if (p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query)) {
-          results.push({
-            id: p.id,
-            type: 'project',
-            title: p.name,
-            subtitle: `${p.status} • ${p.progress}%`,
-            url: `/projects/${p.id}`,
-          });
-        }
-      });
+    } catch (err) {
+      console.warn('[Search DB Error]:', err);
     }
 
     return NextResponse.json({ results: results.slice(0, 20), total: results.length });

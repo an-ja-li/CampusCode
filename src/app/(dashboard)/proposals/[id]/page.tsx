@@ -1,20 +1,20 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Clock, DollarSign, Calendar, Code2, Star,
-  CheckCircle2, XCircle, MessageSquare, User, Layers, ShieldCheck,
+  CheckCircle2, XCircle, MessageSquare, User, Layers, ShieldCheck, Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { proposals, solutionRequests } from "@/lib/mock-data";
 import { formatCurrency, formatRelativeTime, getStatusColor } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import type { Proposal, SolutionRequest } from "@/types";
 
 export default function ProposalDetailPage() {
   const params = useParams();
@@ -22,7 +22,33 @@ export default function ProposalDetailPage() {
   const { user } = useAuth();
   const isClient = user?.role?.toLowerCase() === "client";
   const [messagingLoading, setMessagingLoading] = useState(false);
-  const proposal = proposals.find((p) => p.id === params.id);
+  const [loading, setLoading] = useState(true);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+
+  useEffect(() => {
+    async function loadProposal() {
+      try {
+        const res = await fetch(`/api/proposals/${params.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setProposal(data);
+        }
+      } catch (err) {
+        console.error("Error loading proposal:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (params.id) loadProposal();
+  }, [params.id]);
+
+  if (loading) {
+    return (
+      <div className="p-12 flex justify-center items-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
+      </div>
+    );
+  }
 
   if (!proposal) {
     return (
@@ -34,9 +60,9 @@ export default function ProposalDetailPage() {
     );
   }
 
-  const request = solutionRequests.find((sr) => sr.id === proposal.solutionRequestId);
-  const totalMilestoneAmount = proposal.milestones.reduce((s, m) => s + m.amount, 0);
-  const totalDays = proposal.milestones.reduce((s, m) => s + m.estimatedDays, 0);
+  const request = proposal.solutionRequest;
+  const totalMilestoneAmount = (proposal.milestones || []).reduce((s, m) => s + m.amount, 0);
+  const totalDays = (proposal.milestones || []).reduce((s, m) => s + m.estimatedDays, 0);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
@@ -152,7 +178,7 @@ export default function ProposalDetailPage() {
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Code2 className="h-4 w-4" /> Proposed Tech Stack</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {proposal.technologies.map((t) => (
+                  {(proposal.technologies || []).map((t) => (
                     <Badge key={t} variant="secondary" className="px-3 py-1.5">{t}</Badge>
                   ))}
                 </div>
