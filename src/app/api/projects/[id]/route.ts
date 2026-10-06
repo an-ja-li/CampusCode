@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import type { ProjectStatus } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
@@ -56,7 +57,9 @@ export async function PATCH(
         githubRepo: body.githubRepo !== undefined ? body.githubRepo : undefined,
         category: body.category !== undefined ? body.category : undefined,
         technologies: body.technologies !== undefined ? body.technologies : undefined,
-        status: body.status !== undefined ? body.status : undefined,
+        status: body.status !== undefined
+          ? (String(body.status).toUpperCase() as ProjectStatus)
+          : undefined,
         progress: body.progress !== undefined ? body.progress : undefined,
         isPublished: body.isPublished !== undefined ? body.isPublished : undefined,
       },

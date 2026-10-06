@@ -268,11 +268,20 @@ export function useAuth() {
     []
   );
 
+  const loginWithGitHub = useCallback(async (callbackUrl = "/dashboard") => {
+    try {
+      await signIn("github", { callbackUrl });
+    } catch (error) {
+      console.error("[useAuth] GitHub login error:", error);
+    }
+  }, []);
+
   return {
     user,
     isAuthenticated,
     isLoading: isSessionLoading || profileLoading,
     login,
+    loginWithGitHub,
     register,
     logout,
     updateProfile,

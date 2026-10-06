@@ -2,10 +2,11 @@
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, CheckCircle2, Plus, Loader2, X,
-  Trash2, PlusCircle,
+  Trash2, GitBranch, Rocket, ListChecks, RefreshCw, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,11 +15,36 @@ import { getStatusColor, getPriorityColor } from "@/lib/utils";
 import { KANBAN_COLUMNS } from "@/lib/constants";
 import type { Project, Task, TaskStatus, TaskPriority } from "@/types";
 
+const ISSUE_MARKER_PREFIX = "campuscode:issue:";
+const SYSTEM_LABEL_PREFIX = "campuscode:";
+
+function normaliseTasks(tasks: Task[]) {
+  return tasks.map((task) => ({
+    ...task,
+    status: task.status.toLowerCase() as TaskStatus,
+    priority: task.priority.toLowerCase() as TaskPriority,
+  }));
+}
+
+function issueUrl(repository: string, labels: string[]) {
+  const issueNumber = labels.find((label) => label.startsWith(ISSUE_MARKER_PREFIX))?.slice(ISSUE_MARKER_PREFIX.length);
+  if (!issueNumber) return null;
+  const repo = repository.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "").replace(/\/$/, "");
+  return repo.includes("/") ? `https://github.com/${repo}/issues/${issueNumber}` : null;
+}
+
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [githubRepo, setGithubRepo] = useState("");
+  const [isSavingWorkspace, setIsSavingWorkspace] = useState(false);
+  const [isGitHubSyncing, setIsGitHubSyncing] = useState(false);
+  const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null);
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [githubRepositories, setGithubRepositories] = useState<Array<{ full_name: string; html_url: string }>>([]);
 
   // Modals States
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
@@ -42,8 +68,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         if (res.ok) {
           const data = await res.json();
           if (!cancelled && data && !data.error) {
-            setProject(data);
-            setTasks(data.tasks || []);
+            const normalizedTasks = normaliseTasks(data.tasks || []);
+            setProject({
+              ...data,
+              status: data.status.toLowerCase(),
+              tasks: normalizedTasks,
+            });
+            setTasks(normalizedTasks);
+            setGithubRepo(data.githubRepo || "");
             setLoading(false);
             return;
           }
@@ -62,11 +94,62 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     };
   }, [id]);
 
+  useEffect(() => {
+    const githubState = searchParams.get("github");
+    if (githubState === "unavailable") {
+      setWorkspaceMessage("GitHub connection is not configured yet. Add the GitHub App variables to your deployment, then try again.");
+    } else if (githubState === "connected") {
+      setWorkspaceMessage("GitHub connected. Choose a repository below to start syncing issues.");
+    } else if (githubState === "connection-failed") {
+      setWorkspaceMessage("GitHub connection could not be completed. Please try again.");
+    } else if (githubState === "forbidden") {
+      setWorkspaceMessage("Only the project owner can connect GitHub.");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    fetch(`/api/projects/${id}/github/repositories`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!data) return;
+        setGithubConnected(Boolean(data.connected));
+        setGithubRepositories(data.repositories || []);
+      })
+      .catch(() => {});
+  }, [id]);
+
+  // Webhook deliveries update the database immediately. Polling keeps an open workspace fresh
+  // without making collaborators refresh the page themselves.
+  useEffect(() => {
+    if (!project?.githubRepo) return;
+    const interval = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/projects/${id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const syncedTasks = normaliseTasks(data.tasks || []);
+        setTasks(syncedTasks);
+        setProject((current) => current ? { ...current, ...data, status: data.status.toLowerCase(), tasks: syncedTasks } : current);
+      } catch {
+        // A transient network issue should not disturb active project work.
+      }
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [id, project?.githubRepo]);
+
   // Handle Task Status Change
   const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    const nextTasks = tasks.map((task) =>
+      task.id === taskId ? { ...task, status: newStatus } : task
+    );
+    const nextProgress = nextTasks.length
+      ? Math.round((nextTasks.filter((task) => task.status === "done").length / nextTasks.length) * 100)
+      : 0;
+
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
     );
+    setProject((previous) => previous ? { ...previous, progress: nextProgress } : previous);
 
     if (selectedTaskForModal && selectedTaskForModal.id === taskId) {
       setSelectedTaskForModal((prev) => (prev ? { ...prev, status: newStatus } : prev));
@@ -77,6 +160,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskId, status: newStatus }),
+      });
+      await fetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ progress: nextProgress }),
       });
     } catch (err) {
       console.error("Failed to update task status:", err);
@@ -176,6 +264,89 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const completedTasks = tasks.filter((task) => task.status === "done").length;
+  const taskProgress = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
+  const allTasksComplete = tasks.length > 0 && completedTasks === tasks.length;
+  const isComplete = project?.status.toLowerCase() === "completed";
+
+  const saveWorkspace = async (updates: Partial<Project>) => {
+    if (!project) return;
+
+    setIsSavingWorkspace(true);
+    setWorkspaceMessage(null);
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) throw new Error("Unable to save project");
+      const updated = await res.json();
+      setProject((previous) => previous ? {
+        ...previous,
+        ...updated,
+        status: updated.status?.toLowerCase() || previous.status,
+      } : previous);
+      setWorkspaceMessage("Workspace saved.");
+    } catch (error) {
+      console.error("Failed to save workspace:", error);
+      setWorkspaceMessage("Could not save your changes. Please try again.");
+    } finally {
+      setIsSavingWorkspace(false);
+    }
+  };
+
+  const completeProject = async () => {
+    if (!allTasksComplete) {
+      setWorkspaceMessage("Finish every task before completing this project.");
+      return;
+    }
+    await saveWorkspace({ status: "completed", progress: 100 });
+  };
+
+  const syncGitHubIssues = async () => {
+    setIsGitHubSyncing(true);
+    setWorkspaceMessage(null);
+    try {
+      const [res, kanbanRes] = await Promise.all([
+        fetch(`/api/projects/${id}/github/sync`, { method: "POST" }),
+        fetch(`/api/projects/${id}/github/kanban-log`, { method: "POST" }).catch(() => null),
+      ]);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "GitHub sync failed");
+      const syncedTasks = normaliseTasks(data.project?.tasks || []);
+      setTasks(syncedTasks);
+      if (data.project) setProject((current) => current ? { ...current, ...data.project, status: data.project.status.toLowerCase(), tasks: syncedTasks } : current);
+      setWorkspaceMessage(`Synced ${data.issueCount} GitHub issue${data.issueCount === 1 ? "" : "s"} & updated repo kanban-log.json.`);
+    } catch (error) {
+      setWorkspaceMessage(error instanceof Error ? error.message : "GitHub sync failed.");
+    } finally {
+      setIsGitHubSyncing(false);
+    }
+  };
+
+  const selectGitHubRepository = async () => {
+    if (!githubRepo.trim()) return;
+    setIsSavingWorkspace(true);
+    setWorkspaceMessage(null);
+    try {
+      const res = await fetch(`/api/projects/${id}/github/repository`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullName: githubRepo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not select repository");
+      setProject((current) => current ? { ...current, githubRepo: data.githubRepo } : current);
+      setWorkspaceMessage("Repository connected. You can now sync GitHub issues.");
+    } catch (error) {
+      setWorkspaceMessage(error instanceof Error ? error.message : "Could not select repository.");
+    } finally {
+      setIsSavingWorkspace(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-16 flex items-center justify-center">
@@ -239,6 +410,98 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </motion.div>
 
+      {/* Workspace overview: projects collect the proof and assets needed for a future listing. */}
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]"
+      >
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <ListChecks className="h-4 w-4 text-[var(--primary)]" /> Project workspace
+              </div>
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                Track delivery here; Marketplace uses this project to create a pre-filled listing later.
+              </p>
+            </div>
+            <span className="text-2xl font-bold">{taskProgress}%</span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+              <span>{completedTasks} of {tasks.length} tasks complete</span>
+              <span>{allTasksComplete ? "Ready to complete" : `${Math.max(tasks.length - completedTasks, 0)} remaining`}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-[var(--muted)]">
+              <div className="h-full rounded-full bg-[var(--primary)] transition-all duration-300" style={{ width: `${taskProgress}%` }} />
+            </div>
+          </div>
+
+          {githubConnected ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <GitBranch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <select
+                  value={githubRepo}
+                  onChange={(event) => setGithubRepo(event.target.value)}
+                  className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] pl-9 pr-3 text-sm custom-select"
+                  aria-label="GitHub repository"
+                >
+                  <option value="">Select a GitHub repository</option>
+                  {githubRepositories.map((repository) => <option key={repository.full_name} value={repository.full_name}>{repository.full_name}</option>)}
+                </select>
+              </div>
+              <Button type="button" variant="outline" className="gap-1.5" disabled={!githubRepo.trim() || isSavingWorkspace} onClick={selectGitHubRepository}>
+                Use repository
+              </Button>
+              <Button type="button" variant="outline" className="gap-1.5" disabled={!project.githubRepo || isGitHubSyncing} onClick={syncGitHubIssues}>
+                <RefreshCw className={`h-3.5 w-3.5 ${isGitHubSyncing ? "animate-spin" : ""}`} /> Sync issues
+              </Button>
+            </div>
+          ) : (
+            <Link href={`/api/github/connect?projectId=${id}`}>
+              <Button type="button" variant="outline" className="gap-1.5">
+                <GitBranch className="h-4 w-4" /> Connect GitHub
+              </Button>
+            </Link>
+          )}
+          {workspaceMessage && <p className="text-xs text-[var(--muted-foreground)]">{workspaceMessage}</p>}
+        </div>
+
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 flex flex-col justify-between gap-5">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Rocket className="h-4 w-4 text-[var(--primary)]" /> Release readiness
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted-foreground)]">
+              {isComplete
+                ? "This project is complete. Generate a Marketplace draft with its project details already filled in."
+                : "Complete all tasks to unlock a Marketplace draft. Publishing and listing details stay in Marketplace."}
+            </p>
+          </div>
+
+          {isComplete ? (
+            <Link href={`/sell?projectId=${project.id}`} className="w-full">
+              <Button className="w-full gap-1.5">
+                <Rocket className="h-4 w-4" /> Generate Marketplace Draft
+              </Button>
+            </Link>
+          ) : (
+            <Button
+              type="button"
+              className="w-full gap-1.5"
+              disabled={!allTasksComplete || isSavingWorkspace}
+              onClick={completeProject}
+            >
+              <CheckCircle2 className="h-4 w-4" /> Mark Project Complete
+            </Button>
+          )}
+        </div>
+      </motion.section>
+
       {/* Kanban Board */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 pt-2">
         <p className="text-xs text-[var(--muted-foreground)]">
@@ -288,12 +551,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
                       {task.labels && task.labels.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                          {task.labels.map((label) => (
+                          {task.labels.filter((label) => !label.startsWith(SYSTEM_LABEL_PREFIX)).map((label) => (
                             <Badge key={label} variant="secondary" className="text-[10px] font-normal">
                               {label}
                             </Badge>
                           ))}
                         </div>
+                      )}
+
+                      {issueUrl(project.githubRepo || "", task.labels || []) && (
+                        <a
+                          href={issueUrl(project.githubRepo || "", task.labels || []) || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--primary)] hover:underline"
+                        >
+                          GitHub issue <ExternalLink className="h-3 w-3" />
+                        </a>
                       )}
 
                       {/* Subtasks Progress */}

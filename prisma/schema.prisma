@@ -21,6 +21,8 @@ model User {
   password      String?
   role          UserRole  @default(STUDENT)
   isVerified    Boolean   @default(false)
+  githubUsername String?
+  githubAccessToken String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -128,6 +130,7 @@ model Project {
   ownerId     String
   owner       User          @relation("ProjectOwner", fields: [ownerId], references: [id])
   githubRepo  String?
+  githubInstallationId String?
   technologies String[]
   isPublished Boolean       @default(false)
   deadline    DateTime?

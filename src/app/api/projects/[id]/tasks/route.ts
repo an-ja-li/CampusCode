@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import type { TaskStatus, TaskPriority } from '@prisma/client';
+import { pushTaskToGitHub, closeTaskOnGitHub } from '@/lib/github-project-sync';
 
 export async function POST(
   request: NextRequest,
@@ -43,7 +44,16 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(newTask, { status: 201 });
+    let githubSyncError: string | null = null;
+    try {
+      const project = await db.project.findUnique({ where: { id: projectId }, select: { githubRepo: true } });
+      if (project?.githubRepo) await pushTaskToGitHub(newTask.id);
+    } catch (syncError) {
+      githubSyncError = syncError instanceof Error ? syncError.message : 'GitHub task sync failed';
+      console.warn('[GitHub task sync] Create sync failed:', syncError);
+    }
+
+    return NextResponse.json({ ...newTask, githubSyncError }, { status: 201 });
   } catch (error) {
     console.error('[API Project Tasks POST Error]:', error);
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
@@ -77,7 +87,16 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedTask);
+    let githubSyncError: string | null = null;
+    try {
+      const project = await db.project.findUnique({ where: { id: updatedTask.projectId }, select: { githubRepo: true } });
+      if (project?.githubRepo) await pushTaskToGitHub(updatedTask.id);
+    } catch (syncError) {
+      githubSyncError = syncError instanceof Error ? syncError.message : 'GitHub task sync failed';
+      console.warn('[GitHub task sync] Update sync failed:', syncError);
+    }
+
+    return NextResponse.json({ ...updatedTask, githubSyncError });
   } catch (error) {
     console.error('[API Project Tasks PATCH Error]:', error);
     return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
@@ -94,6 +113,12 @@ export async function DELETE(
 
     if (!taskId) {
       return NextResponse.json({ error: 'Task ID required' }, { status: 400 });
+    }
+
+    try {
+      await closeTaskOnGitHub(taskId);
+    } catch (syncErr) {
+      console.warn('[GitHub task sync] Failed to close task on GitHub:', syncErr);
     }
 
     await db.task.delete({ where: { id: taskId } });
